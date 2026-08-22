@@ -12,7 +12,7 @@ export async function criarPedido(data: NovoPedido) {
 
   const session = await getSession()
   if (!session || !["Supervisor", "Adm", "Gerente", "Financeiro"].includes(session.tipoAcesso)) {
-    throw new Error("Voce nao tem permissao para criar pedidos")
+    throw new Error("Você não tem permissão para criar pedidos")
   }
 
   if (data.tipo_pedido !== "reembolso_km" && data.conducao > 0) {
@@ -1418,7 +1418,8 @@ export async function listarPedidosSemNota(filtros?: {
     .select(`
       *,
       colaborador:colaboradores!colaborador_id (
-        nome_completo, salario, tipo_acesso, equipe_id, cnpj, email
+        nome_completo, salario, tipo_acesso, equipe_id, cnpj, email,
+        equipe:equipes!colaboradores_equipe_id_fkey ( id, nome )
       ),
       notas_fiscais ( id )
     `)
@@ -1470,7 +1471,8 @@ export async function listarPedidosComNota(filtros?: {
     .select(`
       *,
       colaborador:colaboradores!colaborador_id (
-        nome_completo, salario, tipo_acesso, equipe_id
+        nome_completo, salario, tipo_acesso, equipe_id,
+        equipe:equipes!colaboradores_equipe_id_fkey ( id, nome )
       ),
       criado_por:colaboradores!criado_por_colaborador_id (
         nome_completo, tipo_acesso

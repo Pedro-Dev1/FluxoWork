@@ -42,11 +42,28 @@ export interface PedidoPagamento {
   data_emissao_nota?: string
   nota_fiscal_url?: string
   data_nota_recebida?: string
-  notas_fiscais?: {
-    arquivo_xml_url: string
-    arquivo_pdf_url: string
-    created_at: string
-  }
+  data_limite_anexo_nota?: string
+  motivo_prorrogacao?: string
+  data_solicitacao_prorrogacao?: string
+  notas_fiscais?:
+    | {
+        numero_nfse?: string
+        chave_acesso?: string
+        valor_servico?: number
+        cpf_cnpj_prestador?: string
+        arquivo_xml_url: string
+        arquivo_pdf_url: string
+        created_at: string
+      }
+    | {
+        numero_nfse?: string
+        chave_acesso?: string
+        valor_servico?: number
+        cpf_cnpj_prestador?: string
+        arquivo_xml_url: string
+        arquivo_pdf_url: string
+        created_at: string
+      }[]
   colaborador?: {
     nome_completo: string
     salario: number

@@ -1,8 +1,7 @@
 "use client"
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Calendar, User, DollarSign, AlertCircle, CheckCircle, XCircle } from "lucide-react"
+import { CheckCircle, XCircle } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
 import { useState } from "react"
 import { responderSolicitacaoProrrogacao } from "@/app/actions/pedidos"
@@ -96,19 +95,21 @@ export function SolicitacoesProrrogacaoList({ solicitacoes }: SolicitacoesProrro
 
   if (solicitacoes.length === 0) {
     return (
-      <Card>
-        <CardContent className="py-12 text-center">
-          <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-4" />
-          <p className="text-lg font-medium mb-2">Nenhuma solicitação pendente</p>
-          <p className="text-muted-foreground">Todas as solicitações de prorrogação foram processadas</p>
-        </CardContent>
-      </Card>
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <p className="text-sm font-medium text-foreground mb-1">Nenhuma solicitação pendente</p>
+        <p className="text-sm text-text-tertiary">Todas as solicitações de prorrogação foram processadas.</p>
+      </div>
     )
   }
 
   return (
     <>
-      <div className="space-y-4">
+      <p className="text-sm text-text-secondary mb-3">
+        <span className="font-medium text-foreground tabular-nums">{solicitacoes.length}</span>{" "}
+        {solicitacoes.length === 1 ? "solicitação pendente" : "solicitações pendentes"}
+      </p>
+
+      <div className="space-y-3">
         {solicitacoes.map((solicitacao) => {
           const prazoExpirado = new Date(solicitacao.data_limite_anexo_nota).getTime() < new Date().getTime()
           const diasAtrasado = Math.ceil(
@@ -116,87 +117,60 @@ export function SolicitacoesProrrogacaoList({ solicitacoes }: SolicitacoesProrro
           )
 
           return (
-            <Card key={solicitacao.id} className="border-orange-200 bg-orange-50/50">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <AlertCircle className="w-6 h-6 text-orange-600" />
-                    <div>
-                      <CardTitle className="text-lg">Solicitação de Prorrogação de Prazo</CardTitle>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Solicitado em{" "}
-                        {new Date(solicitacao.data_solicitacao_prorrogacao).toLocaleDateString("pt-BR", {
-                          day: "2-digit",
-                          month: "2-digit",
-                          year: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </p>
-                    </div>
-                  </div>
+            <div
+              key={solicitacao.id}
+              className={`rounded-lg border border-border bg-card p-4 ${prazoExpirado ? "border-l-4 border-l-danger" : ""}`}
+            >
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-medium text-foreground">{solicitacao.colaborador.nome_completo}</span>
+                  <span className="text-sm text-text-tertiary tabular-nums">{formatCurrency(solicitacao.valor_total)}</span>
+                  <span className="text-xs text-text-tertiary tabular-nums">
+                    Prazo original: {new Date(solicitacao.data_limite_anexo_nota).toLocaleDateString("pt-BR")}
+                  </span>
                   {prazoExpirado && (
-                    <span className="px-3 py-1 text-sm font-medium bg-red-100 text-red-700 rounded-full">
+                    <span className="text-xs font-medium text-danger tabular-nums">
                       {diasAtrasado} {diasAtrasado === 1 ? "dia" : "dias"} atrasado
                     </span>
                   )}
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="flex items-start gap-3 p-3 rounded-lg bg-white border">
-                    <User className="w-5 h-5 text-primary mt-0.5" />
-                    <div>
-                      <p className="text-sm text-muted-foreground">Colaborador</p>
-                      <p className="font-semibold">{solicitacao.colaborador.nome_completo}</p>
-                    </div>
-                  </div>
+                <span className="text-xs text-text-tertiary tabular-nums shrink-0">
+                  Solicitado em{" "}
+                  {new Date(solicitacao.data_solicitacao_prorrogacao).toLocaleDateString("pt-BR", {
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "numeric",
+                  })}
+                </span>
+              </div>
 
-                  <div className="flex items-start gap-3 p-3 rounded-lg bg-white border">
-                    <DollarSign className="w-5 h-5 text-primary mt-0.5" />
-                    <div>
-                      <p className="text-sm text-muted-foreground">Valor Total</p>
-                      <p className="font-semibold">{formatCurrency(solicitacao.valor_total)}</p>
-                    </div>
-                  </div>
+              <div className="rounded-control bg-surface px-3 py-2 mb-3">
+                <p className="text-xs text-text-tertiary mb-0.5">Motivo da solicitação</p>
+                <p className="text-sm text-text-secondary">{solicitacao.motivo_prorrogacao}</p>
+              </div>
 
-                  <div className="flex items-start gap-3 p-3 rounded-lg bg-white border">
-                    <Calendar className="w-5 h-5 text-primary mt-0.5" />
-                    <div>
-                      <p className="text-sm text-muted-foreground">Prazo Original</p>
-                      <p className="font-semibold">
-                        {new Date(solicitacao.data_limite_anexo_nota).toLocaleDateString("pt-BR")}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-4 rounded-lg bg-white border border-orange-200">
-                  <p className="text-sm font-medium mb-2 text-orange-900">Motivo da Solicitação:</p>
-                  <p className="text-sm text-gray-700">{solicitacao.motivo_prorrogacao}</p>
-                </div>
-
-                <div className="flex gap-3">
-                  <Button
-                    onClick={() => handleAbrirDialog(solicitacao, "aprovar")}
-                    disabled={loading === solicitacao.id}
-                    className="flex-1 bg-green-600 hover:bg-green-700 text-white"
-                  >
-                    <CheckCircle className="w-4 h-4 mr-2" />
-                    Aprovar Prorrogação
-                  </Button>
-                  <Button
-                    onClick={() => handleAbrirDialog(solicitacao, "negar")}
-                    disabled={loading === solicitacao.id}
-                    variant="destructive"
-                    className="flex-1"
-                  >
-                    <XCircle className="w-4 h-4 mr-2" />
-                    Negar Solicitação
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => handleAbrirDialog(solicitacao, "aprovar")}
+                  disabled={loading === solicitacao.id}
+                  className="bg-success hover:bg-success/90 text-white"
+                >
+                  <CheckCircle className="w-3.5 h-3.5 mr-1.5" />
+                  Aprovar
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => handleAbrirDialog(solicitacao, "negar")}
+                  disabled={loading === solicitacao.id}
+                  variant="outline"
+                  className="border-danger text-danger hover:bg-danger-subtle hover:text-danger"
+                >
+                  <XCircle className="w-3.5 h-3.5 mr-1.5" />
+                  Negar
+                </Button>
+              </div>
+            </div>
           )
         })}
       </div>

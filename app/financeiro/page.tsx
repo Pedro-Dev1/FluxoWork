@@ -5,7 +5,6 @@ import { MarcarPagoList } from "@/components/marcar-pago-list"
 import { SolicitacoesProrrogacaoList } from "@/components/solicitacoes-prorrogacao-list"
 import { redirect } from "next/navigation"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { FileWarning, CreditCard, Clock } from "lucide-react"
 
 export default async function FinanceiroPage({
   searchParams,
@@ -60,50 +59,47 @@ export default async function FinanceiroPage({
     <div className="container mx-auto px-4 lg:px-6 py-8 max-w-7xl">
       <div className="mb-8">
         <h1 className="text-2xl font-semibold mb-1 text-foreground">Painel Financeiro</h1>
-        <p className="text-sm text-muted-foreground">Gerencie pagamentos, notas fiscais e prorrogacoes</p>
+        <p className="text-sm text-muted-foreground">Gerencie pagamentos, notas fiscais e prorrogações</p>
       </div>
 
       <Tabs defaultValue={defaultTab} className="w-full">
-        <TabsList className="grid w-full max-w-2xl grid-cols-3 h-10">
-          <TabsTrigger value="pagar" className="flex items-center gap-2 text-sm">
-            <CreditCard className="w-4 h-4" />
-            <span className="hidden sm:inline">Notas Recebidas</span>
-            <span className="sm:hidden">Notas</span>
+        <TabsList className="h-auto w-full justify-start rounded-none bg-transparent p-0 border-b border-border gap-6">
+          <TabsTrigger
+            value="pagar"
+            className="rounded-none border-b-2 border-transparent px-0 pb-3 text-sm font-medium text-text-tertiary shadow-none data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:bg-transparent"
+          >
+            Notas recebidas
             {pedidosComNota.length > 0 && (
-              <span className="flex h-5 min-w-5 items-center justify-center rounded bg-foreground text-xs font-semibold text-background px-1.5">
-                {pedidosComNota.length}
-              </span>
+              <span className="ml-1.5 text-xs tabular-nums text-text-tertiary">{pedidosComNota.length}</span>
             )}
           </TabsTrigger>
-          <TabsTrigger value="sem-nota" className="flex items-center gap-2 text-sm">
-            <FileWarning className="w-4 h-4" />
-            <span className="hidden sm:inline">Sem Nota</span>
-            <span className="sm:hidden">Sem Nota</span>
+          <TabsTrigger
+            value="sem-nota"
+            className="rounded-none border-b-2 border-transparent px-0 pb-3 text-sm font-medium text-text-tertiary shadow-none data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:bg-transparent"
+          >
+            Sem nota
             {pedidosSemNota.length > 0 && (
-              <span className="flex h-5 min-w-5 items-center justify-center rounded bg-foreground text-xs font-semibold text-background px-1.5">
-                {pedidosSemNota.length}
-              </span>
+              <span className="ml-1.5 text-xs tabular-nums text-text-tertiary">{pedidosSemNota.length}</span>
             )}
           </TabsTrigger>
-          <TabsTrigger value="prorrogacoes" className="flex items-center gap-2 text-sm">
-            <Clock className="w-4 h-4" />
-            <span className="hidden sm:inline">Prorrogacoes</span>
-            <span className="sm:hidden">Prorrog.</span>
+          <TabsTrigger
+            value="prorrogacoes"
+            className="rounded-none border-b-2 border-transparent px-0 pb-3 text-sm font-medium text-text-tertiary shadow-none data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:bg-transparent"
+          >
+            Prorrogações
             {solicitacoes.length > 0 && (
-              <span className="flex h-5 min-w-5 items-center justify-center rounded bg-foreground text-xs font-semibold text-background px-1.5">
-                {solicitacoes.length}
-              </span>
+              <span className="ml-1.5 text-xs tabular-nums text-text-tertiary">{solicitacoes.length}</span>
             )}
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="pagar" className="mt-6">
+        <TabsContent value="pagar" className="mt-5">
           <MarcarPagoList pedidos={pedidosComNota} />
         </TabsContent>
-        <TabsContent value="sem-nota" className="mt-6">
+        <TabsContent value="sem-nota" className="mt-5">
           <PedidosSemNotaList pedidos={pedidosSemNota} />
         </TabsContent>
-        <TabsContent value="prorrogacoes" className="mt-6">
+        <TabsContent value="prorrogacoes" className="mt-5">
           <SolicitacoesProrrogacaoList solicitacoes={solicitacoes} />
         </TabsContent>
       </Tabs>
