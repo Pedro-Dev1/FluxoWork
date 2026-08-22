@@ -1,390 +1,346 @@
 "use client"
 
-import { useState } from "react"
+import { Fragment, useEffect, useMemo, useState } from "react"
 import type { PedidoPagamento } from "@/types/pedido"
 import type { Equipe } from "@/types/equipe"
 import { Card } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { formatCurrency } from "@/lib/utils"
-import {
-  Clock,
-  CheckCircle,
-  XCircle,
-  AlertCircle,
-  Search,
-  Filter,
-  ChevronDown,
-  ChevronUp,
-  Download,
-  FileText,
-} from "lucide-react"
-import { format } from "date-fns"
+import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { StatusBadge } from "@/components/ui/status-badge"
+import { EmptyState } from "@/components/ui/empty-state"
+import { Search, X, ChevronDown, ChevronUp, Download, FileText } from "lucide-react"
+import { SimplePager } from "@/components/ui/simple-pager"
+import { useMaskedCurrency } from "@/components/currency-display"
 
 interface HistoricoCompletoListProps {
   pedidos: PedidoPagamento[]
   equipes: Equipe[]
 }
 
-export function HistoricoCompletoList({ pedidos: pedidosIniciais, equipes }: HistoricoCompletoListProps) {
-  const [filtros, setFiltros] = useState({
-    dataInicio: "",
-    dataFim: "",
-    colaboradorNome: "",
-    equipeId: "todas",
-    status: "todos",
-  })
-  const [pedidosExpandidos, setPedidosExpandidos] = useState<Set<string>>(new Set())
-  const [mostrarFiltros, setMostrarFiltros] = useState(false)
+const STATUS_OPTIONS = [
+  { value: "todos", label: "Todos" },
+  { value: "pendente_gerente", label: "Aguardando gerente" },
+  { value: "pendente_financeiro", label: "Aguardando financeiro" },
+  { value: "aprovado", label: "Aprovado" },
+  { value: "pago", label: "Pago" },
+  { value: "nota_recebida", label: "Nota recebida" },
+  { value: "recusado", label: "Recusado" },
+  { value: "correcao", label: "Correção solicitada" },
+]
 
-  const getStatusBadge = (status: string) => {
-    const statusConfig = {
-      pendente_gerente: { label: "Aguardando Gerente", variant: "secondary" as const, icon: Clock },
-      pendente_financeiro: { label: "Aguardando Financeiro", variant: "secondary" as const, icon: Clock },
-      aprovado: { label: "Aprovado", variant: "default" as const, icon: CheckCircle },
-      pago: { label: "Pago", variant: "default" as const, icon: CheckCircle },
-      nota_recebida: { label: "Nota Recebida", variant: "default" as const, icon: CheckCircle },
-      recusado: { label: "Recusado", variant: "destructive" as const, icon: XCircle },
-      correcao: { label: "Correção Solicitada", variant: "outline" as const, icon: AlertCircle },
+export function HistoricoCompletoList({ pedidos, equipes }: HistoricoCompletoListProps) {
+  const { formatValue } = useMaskedCurrency()
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [showFilters, setShowFilters] = useState(false)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(25)
+
+  const [busca, setBusca] = useState("")
+  const [equipeFiltro, setEquipeFiltro] = useState("todas")
+  const [statusFiltro, setStatusFiltro] = useState("todos")
+
+  const filtrosAtivos = !!busca || equipeFiltro !== "todas" || statusFiltro !== "todos"
+
+  const pedidosFiltrados = useMemo(() => {
+    let result = pedidos
+    if (busca) {
+      const q = busca.toLowerCase()
+      result = result.filter((p) => p.colaborador?.nome_completo?.toLowerCase().includes(q))
     }
-
-    const config = statusConfig[status as keyof typeof statusConfig] || {
-      label: status,
-      variant: "secondary" as const,
-      icon: Clock,
+    if (equipeFiltro === "sem-equipe") {
+      result = result.filter((p) => !p.colaborador?.equipe_id)
+    } else if (equipeFiltro !== "todas") {
+      result = result.filter((p) => p.colaborador?.equipe_id === equipeFiltro)
     }
-    const Icon = config.icon
-
-    return (
-      <Badge variant={config.variant} className="flex items-center gap-1 w-fit">
-        <Icon className="w-3 h-3" />
-        {config.label}
-      </Badge>
-    )
-  }
-
-  const pedidosFiltrados = pedidosIniciais.filter((pedido) => {
-    // Filtro de data
-    if (filtros.dataInicio && new Date(pedido.created_at) < new Date(filtros.dataInicio)) {
-      return false
+    if (statusFiltro !== "todos") {
+      result = result.filter((p) => p.status === statusFiltro)
     }
-    if (filtros.dataFim && new Date(pedido.created_at) > new Date(filtros.dataFim)) {
-      return false
-    }
+    return result
+  }, [pedidos, busca, equipeFiltro, statusFiltro])
 
-    // Filtro de colaborador
-    if (
-      filtros.colaboradorNome &&
-      !pedido.colaborador?.nome_completo?.toLowerCase().includes(filtros.colaboradorNome.toLowerCase())
-    ) {
-      return false
-    }
+  useEffect(() => {
+    setPage(1)
+  }, [busca, equipeFiltro, statusFiltro, pageSize])
 
-    // Filtro de equipe
-    if (filtros.equipeId !== "todas") {
-      if (filtros.equipeId === "sem-equipe" && pedido.colaborador?.equipe_id) {
-        return false
-      }
-      if (filtros.equipeId !== "sem-equipe" && pedido.colaborador?.equipe_id !== filtros.equipeId) {
-        return false
-      }
-    }
-
-    // Filtro de status
-    if (filtros.status !== "todos" && pedido.status !== filtros.status) {
-      return false
-    }
-
-    return true
-  })
-
-  const togglePedido = (pedidoId: string) => {
-    const novosExpandidos = new Set(pedidosExpandidos)
-    if (novosExpandidos.has(pedidoId)) {
-      novosExpandidos.delete(pedidoId)
-    } else {
-      novosExpandidos.add(pedidoId)
-    }
-    setPedidosExpandidos(novosExpandidos)
-  }
+  const pedidosPaginados = pedidosFiltrados.slice((page - 1) * pageSize, page * pageSize)
+  const totalFiltrado = pedidosFiltrados.reduce((s, p) => s + p.valor_total, 0)
 
   const limparFiltros = () => {
-    setFiltros({
-      dataInicio: "",
-      dataFim: "",
-      colaboradorNome: "",
-      equipeId: "todas",
-      status: "todos",
-    })
+    setBusca("")
+    setEquipeFiltro("todas")
+    setStatusFiltro("todos")
   }
 
-  // Calcular estatísticas
   const stats = {
-    total: pedidosFiltrados.length,
-    valorTotal: pedidosFiltrados.reduce((acc, p) => acc + p.valor_total, 0),
-    aprovados: pedidosFiltrados.filter((p) => p.status === "aprovado").length,
-    pendentes: pedidosFiltrados.filter((p) => p.status.includes("pendente")).length,
+    total: pedidos.length,
+    valorTotal: pedidos.reduce((acc, p) => acc + p.valor_total, 0),
+    aprovados: pedidos.filter((p) => p.status === "aprovado").length,
+    pendentes: pedidos.filter((p) => p.status.includes("pendente")).length,
   }
 
   return (
     <div className="space-y-6">
-      {/* Estatísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Card className="p-4">
-          <p className="text-sm text-muted-foreground mb-1">Total de Pedidos</p>
-          <p className="text-2xl font-bold">{stats.total}</p>
+          <p className="text-xs text-text-tertiary mb-1">Total de pedidos</p>
+          <p className="text-xl font-semibold tabular-nums text-foreground">{stats.total}</p>
         </Card>
         <Card className="p-4">
-          <p className="text-sm text-muted-foreground mb-1">Valor Total</p>
-          <p className="text-2xl font-bold text-primary">{formatCurrency(stats.valorTotal)}</p>
+          <p className="text-xs text-text-tertiary mb-1">Valor total</p>
+          <p className="text-xl font-semibold tabular-nums text-foreground">{formatValue(stats.valorTotal)}</p>
         </Card>
         <Card className="p-4">
-          <p className="text-sm text-muted-foreground mb-1">Aprovados</p>
-          <p className="text-2xl font-bold text-green-600">{stats.aprovados}</p>
+          <p className="text-xs text-text-tertiary mb-1">Aprovados</p>
+          <p className="text-xl font-semibold tabular-nums text-success">{stats.aprovados}</p>
         </Card>
         <Card className="p-4">
-          <p className="text-sm text-muted-foreground mb-1">Pendentes</p>
-          <p className="text-2xl font-bold text-amber-600">{stats.pendentes}</p>
+          <p className="text-xs text-text-tertiary mb-1">Pendentes</p>
+          <p className="text-xl font-semibold tabular-nums text-warning">{stats.pendentes}</p>
         </Card>
       </div>
 
-      {/* Filtros */}
-      <Card className="p-6">
-        <Button
-          variant="outline"
-          onClick={() => setMostrarFiltros(!mostrarFiltros)}
-          className="w-full md:w-auto flex items-center gap-2 mb-4"
-        >
-          <Filter className="w-4 h-4" />
-          Filtros
-          {mostrarFiltros ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-        </Button>
+      <div>
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          <Button variant="outline" size="sm" className="h-8 rounded-control" onClick={() => setShowFilters(!showFilters)}>
+            <Search className="h-3.5 w-3.5 mr-1.5" />
+            {busca ? `Colaborador: ${busca}` : "Colaborador"}
+          </Button>
+          <Select value={equipeFiltro} onValueChange={setEquipeFiltro}>
+            <SelectTrigger className="h-8 w-auto rounded-control text-xs gap-1.5 border-border">
+              <SelectValue>
+                {equipeFiltro === "todas"
+                  ? "Equipe: todas"
+                  : equipeFiltro === "sem-equipe"
+                    ? "Equipe: sem equipe"
+                    : `Equipe: ${equipes.find((e) => e.id === equipeFiltro)?.nome || ""}`}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todas">Todas</SelectItem>
+              <SelectItem value="sem-equipe">Sem equipe</SelectItem>
+              {equipes.map((e) => (
+                <SelectItem key={e.id} value={e.id}>
+                  {e.nome}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={statusFiltro} onValueChange={setStatusFiltro}>
+            <SelectTrigger className="h-8 w-auto rounded-control text-xs gap-1.5 border-border">
+              <SelectValue>
+                {"Status: " + (STATUS_OPTIONS.find((s) => s.value === statusFiltro)?.label || "Todos")}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {STATUS_OPTIONS.map((s) => (
+                <SelectItem key={s.value} value={s.value}>
+                  {s.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {filtrosAtivos && (
+            <Button variant="ghost" size="sm" className="h-8 text-xs text-text-tertiary" onClick={limparFiltros}>
+              <X className="h-3.5 w-3.5 mr-1" />
+              Limpar
+            </Button>
+          )}
+        </div>
 
-        {mostrarFiltros && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <Label htmlFor="dataInicio">Data Início</Label>
-              <Input
-                id="dataInicio"
-                type="date"
-                value={filtros.dataInicio}
-                onChange={(e) => setFiltros({ ...filtros, dataInicio: e.target.value })}
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="dataFim">Data Fim</Label>
-              <Input
-                id="dataFim"
-                type="date"
-                value={filtros.dataFim}
-                onChange={(e) => setFiltros({ ...filtros, dataFim: e.target.value })}
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="colaboradorNome">Nome do Colaborador</Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  id="colaboradorNome"
-                  placeholder="Digite o nome..."
-                  value={filtros.colaboradorNome}
-                  onChange={(e) => setFiltros({ ...filtros, colaboradorNome: e.target.value })}
-                  className="pl-9"
-                />
-              </div>
-            </div>
-
-            <div>
-              <Label htmlFor="equipe">Equipe</Label>
-              <Select value={filtros.equipeId} onValueChange={(value) => setFiltros({ ...filtros, equipeId: value })}>
-                <SelectTrigger id="equipe">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todas">Todas as Equipes</SelectItem>
-                  <SelectItem value="sem-equipe">Sem Equipe</SelectItem>
-                  {equipes.map((equipe) => (
-                    <SelectItem key={equipe.id} value={equipe.id}>
-                      {equipe.nome}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="status">Status</Label>
-              <Select value={filtros.status} onValueChange={(value) => setFiltros({ ...filtros, status: value })}>
-                <SelectTrigger id="status">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos os Status</SelectItem>
-                  <SelectItem value="pendente_gerente">Aguardando Gerente</SelectItem>
-                  <SelectItem value="pendente_financeiro">Aguardando Financeiro</SelectItem>
-                  <SelectItem value="aprovado">Aprovado</SelectItem>
-                  <SelectItem value="pago">Pago</SelectItem>
-                  <SelectItem value="nota_recebida">Nota Recebida</SelectItem>
-                  <SelectItem value="recusado">Recusado</SelectItem>
-                  <SelectItem value="correcao">Correção Solicitada</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="flex items-end">
-              <Button variant="outline" onClick={limparFiltros} className="w-full bg-transparent">
-                Limpar Filtros
-              </Button>
-            </div>
+        {showFilters && (
+          <div className="mb-4 pb-4 border-b border-border">
+            <label className="text-xs font-medium text-text-secondary mb-1 block">Buscar colaborador</label>
+            <Input
+              placeholder="Nome do colaborador..."
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              className="h-9 max-w-sm"
+              autoFocus
+            />
           </div>
         )}
-      </Card>
-
-      {/* Lista de Pedidos */}
-      <div className="space-y-3">
-        <p className="text-sm text-muted-foreground">
-          {pedidosFiltrados.length} {pedidosFiltrados.length === 1 ? "pedido encontrado" : "pedidos encontrados"}
-        </p>
 
         {pedidosFiltrados.length === 0 ? (
-          <Card className="p-8 text-center">
-            <p className="text-muted-foreground">Nenhum pedido encontrado com os filtros aplicados</p>
-          </Card>
+          <EmptyState title="Nenhum pedido encontrado" description="Ajuste os filtros para ver outros resultados." />
         ) : (
-          pedidosFiltrados.map((pedido) => {
-            const expandido = pedidosExpandidos.has(pedido.id)
-            const colaboradorNome = pedido.colaborador?.nome_completo || "N/A"
-            const criadoPor = pedido.criado_por?.nome_completo || "N/A"
-            const notaFiscal = Array.isArray(pedido.notas_fiscais)
-              ? pedido.notas_fiscais[0]
-              : pedido.notas_fiscais || null
+          <>
+            <p className="text-sm text-text-secondary mb-3">
+              <span className="font-medium text-foreground tabular-nums">{pedidosFiltrados.length}</span>{" "}
+              {pedidosFiltrados.length === 1 ? "pedido encontrado" : "pedidos encontrados"} ·{" "}
+              <span className="font-medium text-foreground tabular-nums">{formatValue(totalFiltrado)}</span>
+            </p>
 
-            return (
-              <Card key={pedido.id} className="p-4 hover:shadow-md transition-shadow">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-semibold text-base truncate">{colaboradorNome}</h3>
-                      {getStatusBadge(pedido.status)}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                      <span>Criado em {format(new Date(pedido.created_at), "dd/MM/yyyy")}</span>
-                      <span>Por: {criadoPor}</span>
-                      {pedido.nota_emitida && (
-                        <Badge variant="outline" className="text-xs">
-                          <FileText className="w-3 h-3 mr-1" />
-                          Nota Enviada
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
+            <div className="border border-border rounded-lg overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-surface hover:bg-surface border-border">
+                    <TableHead className="h-9 text-xs font-medium text-text-tertiary">Colaborador</TableHead>
+                    <TableHead className="h-9 text-xs font-medium text-text-tertiary hidden md:table-cell">Criado por</TableHead>
+                    <TableHead className="h-9 text-xs font-medium text-text-tertiary hidden sm:table-cell">Criado</TableHead>
+                    <TableHead className="h-9 text-xs font-medium text-text-tertiary">Status</TableHead>
+                    <TableHead className="h-9 text-xs font-medium text-text-tertiary text-right">Valor total</TableHead>
+                    <TableHead className="h-9 w-10" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {pedidosPaginados.map((pedido) => {
+                    const isExpanded = expandedId === pedido.id
+                    const colaboradorNome = pedido.colaborador?.nome_completo || "N/A"
+                    const criadoPor = pedido.criado_por?.nome_completo || "N/A"
+                    const notaFiscal = Array.isArray(pedido.notas_fiscais) ? pedido.notas_fiscais[0] : pedido.notas_fiscais || null
 
-                  <div className="flex items-center gap-3">
-                    <div className="text-right">
-                      <p className="text-sm text-muted-foreground">Valor</p>
-                      <p className="font-semibold text-lg text-primary">{formatCurrency(pedido.valor_total)}</p>
-                    </div>
-                    <Button variant="ghost" size="sm" onClick={() => togglePedido(pedido.id)}>
-                      {expandido ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-                    </Button>
-                  </div>
-                </div>
+                    return (
+                      <Fragment key={pedido.id}>
+                        <TableRow
+                          className="group cursor-pointer h-11 border-border hover:bg-surface"
+                          onClick={() => setExpandedId(isExpanded ? null : pedido.id)}
+                        >
+                          <TableCell className="py-2 text-sm font-medium text-foreground">{colaboradorNome}</TableCell>
+                          <TableCell className="py-2 text-sm text-text-tertiary hidden md:table-cell">{criadoPor}</TableCell>
+                          <TableCell className="py-2 text-sm text-text-tertiary tabular-nums hidden sm:table-cell">
+                            {new Date(pedido.created_at).toLocaleDateString("pt-BR")}
+                          </TableCell>
+                          <TableCell className="py-2">
+                            <StatusBadge status={pedido.status} />
+                          </TableCell>
+                          <TableCell className="py-2 text-sm font-medium text-right tabular-nums text-foreground">
+                            {formatValue(pedido.valor_total)}
+                          </TableCell>
+                          <TableCell className="py-2">
+                            <div className="flex items-center justify-end">
+                              {isExpanded ? (
+                                <ChevronUp className="h-4 w-4 text-text-tertiary" />
+                              ) : (
+                                <ChevronDown className="h-4 w-4 text-text-tertiary" />
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                        {isExpanded && (
+                          <TableRow className="border-border">
+                            <TableCell colSpan={6} className="bg-surface px-4 py-3">
+                              {pedido.tipo_pedido !== "reembolso_km" && (
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm mb-3">
+                                  <div>
+                                    <p className="text-xs text-text-tertiary">Salário base</p>
+                                    <p className="font-medium tabular-nums">
+                                      {formatValue(pedido.salario_base ?? pedido.colaborador?.salario ?? 0)}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-text-tertiary">Horas extras</p>
+                                    <p className="font-medium tabular-nums">{formatValue(pedido.horas_extras || 0)}</p>
+                                  </div>
+                                  {(pedido.valor_km || 0) > 0 && (
+                                    <div>
+                                      <p className="text-xs text-text-tertiary">Quilometragem</p>
+                                      <p className="font-medium tabular-nums">{formatValue(pedido.valor_km || 0)}</p>
+                                    </div>
+                                  )}
+                                  {(pedido.conducao || 0) > 0 && (
+                                    <div>
+                                      <p className="text-xs text-text-tertiary">Condução</p>
+                                      <p className="font-medium tabular-nums">{formatValue(pedido.conducao || 0)}</p>
+                                    </div>
+                                  )}
+                                  {(pedido.valor_plantao || 0) > 0 && (
+                                    <div>
+                                      <p className="text-xs text-text-tertiary">Plantão</p>
+                                      <p className="font-medium tabular-nums">{formatValue(pedido.valor_plantao || 0)}</p>
+                                    </div>
+                                  )}
+                                  {(pedido.valor_desconto || 0) > 0 && (
+                                    <div>
+                                      <p className="text-xs text-text-tertiary">Desconto</p>
+                                      <p className="font-medium tabular-nums text-danger">-{formatValue(pedido.valor_desconto || 0)}</p>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
 
-                {expandido && (
-                  <div className="mt-4 pt-4 border-t space-y-3">
-                    {/* Detalhes do Pedido */}
-                    {pedido.tipo_pedido === "completo" && (
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                        <div>
-                          <p className="text-muted-foreground">Salário Base</p>
-                          <p className="font-medium">{formatCurrency(pedido.salario_base ?? pedido.colaborador?.salario ?? 0)}</p>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground">Horas Extras</p>
-                          <p className="font-medium">{formatCurrency(pedido.horas_extras)}</p>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground">Quilometragem</p>
-                          <p className="font-medium">{formatCurrency(pedido.valor_km)}</p>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground">Condução</p>
-                          <p className="font-medium">{formatCurrency(pedido.conducao)}</p>
-                        </div>
-                        {pedido.valor_plantao > 0 && (
-                          <div>
-                            <p className="text-muted-foreground">Plantão</p>
-                            <p className="font-medium">{formatCurrency(pedido.valor_plantao)}</p>
-                          </div>
+                              {pedido.observacao_gerente && (
+                                <div className="mb-2">
+                                  <p className="text-xs text-text-tertiary">Observação do gerente</p>
+                                  <p className="text-sm text-text-secondary">{pedido.observacao_gerente}</p>
+                                </div>
+                              )}
+                              {pedido.observacao_financeiro && (
+                                <div className="mb-2">
+                                  <p className="text-xs text-text-tertiary">Observação do financeiro</p>
+                                  <p className="text-sm text-text-secondary">{pedido.observacao_financeiro}</p>
+                                </div>
+                              )}
+
+                              {notaFiscal && (
+                                <div className="pt-2 mt-2 border-t border-border">
+                                  <div className="flex items-center gap-1.5 mb-1">
+                                    <FileText className="w-3.5 h-3.5 text-text-tertiary" />
+                                    <p className="text-xs text-text-tertiary">
+                                      Nota fiscal {notaFiscal.numero_nfse ? `nº ${notaFiscal.numero_nfse}` : ""} ·{" "}
+                                      {formatValue(notaFiscal.valor_servico ?? 0)}
+                                    </p>
+                                  </div>
+                                  <div className="flex gap-3">
+                                    {notaFiscal.arquivo_xml_url && (
+                                      <a
+                                        href={notaFiscal.arquivo_xml_url}
+                                        download
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1 text-xs text-primary hover:underline font-medium"
+                                      >
+                                        <Download className="h-3.5 w-3.5" />
+                                        XML
+                                      </a>
+                                    )}
+                                    {notaFiscal.arquivo_pdf_url && (
+                                      <a
+                                        href={notaFiscal.arquivo_pdf_url}
+                                        download
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1 text-xs text-primary hover:underline font-medium"
+                                      >
+                                        <Download className="h-3.5 w-3.5" />
+                                        PDF
+                                      </a>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </TableCell>
+                          </TableRow>
                         )}
-                        {pedido.valor_desconto > 0 && (
-                          <div>
-                            <p className="text-muted-foreground">Desconto</p>
-                            <p className="font-medium text-red-600">-{formatCurrency(pedido.valor_desconto)}</p>
-                          </div>
-                        )}
-                      </div>
-                    )}
+                      </Fragment>
+                    )
+                  })}
+                </TableBody>
+                <TableFooter>
+                  <TableRow className="border-border">
+                    <TableCell colSpan={4} className="text-xs font-medium text-text-tertiary py-2 hidden sm:table-cell">
+                      Total
+                    </TableCell>
+                    <TableCell colSpan={2} className="text-xs font-medium text-text-tertiary py-2 sm:hidden">
+                      Total
+                    </TableCell>
+                    <TableCell className="text-right text-sm font-semibold tabular-nums py-2" colSpan={2}>
+                      {formatValue(totalFiltrado)}
+                    </TableCell>
+                  </TableRow>
+                </TableFooter>
+              </Table>
+            </div>
 
-                    {/* Observações */}
-                    {pedido.observacao_gerente && (
-                      <div className="p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md text-sm">
-                        <p className="font-medium mb-1">Obs. Gerente:</p>
-                        <p className="text-muted-foreground">{pedido.observacao_gerente}</p>
-                      </div>
-                    )}
-
-                    {pedido.observacao_financeiro && (
-                      <div className="p-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md text-sm">
-                        <p className="font-medium mb-1">Obs. Financeiro:</p>
-                        <p className="text-muted-foreground">{pedido.observacao_financeiro}</p>
-                      </div>
-                    )}
-
-                    {/* Nota Fiscal */}
-                    {notaFiscal && (
-                      <div className="p-3 bg-purple-50 dark:bg-purple-950 border border-purple-200 dark:border-purple-800 rounded-md">
-                        <p className="font-medium mb-2 text-sm">Nota Fiscal Anexada</p>
-                        <div className="grid grid-cols-2 gap-2 text-xs mb-3">
-                          <div>
-                            <p className="text-muted-foreground">Número NFS-e</p>
-                            <p className="font-medium">{notaFiscal.numero_nfse || "N/A"}</p>
-                          </div>
-                          <div>
-                            <p className="text-muted-foreground">Valor</p>
-                            <p className="font-medium">{formatCurrency(notaFiscal.valor_servico)}</p>
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          {notaFiscal.arquivo_xml_url && (
-                            <Button size="sm" variant="outline" asChild className="text-xs bg-transparent">
-                              <a href={notaFiscal.arquivo_xml_url} download target="_blank" rel="noopener noreferrer">
-                                <Download className="w-3 h-3 mr-1" />
-                                XML
-                              </a>
-                            </Button>
-                          )}
-                          {notaFiscal.arquivo_pdf_url && (
-                            <Button size="sm" variant="outline" asChild className="text-xs bg-transparent">
-                              <a href={notaFiscal.arquivo_pdf_url} download target="_blank" rel="noopener noreferrer">
-                                <Download className="w-3 h-3 mr-1" />
-                                PDF
-                              </a>
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </Card>
-            )
-          })
+            <SimplePager
+              page={page}
+              pageSize={pageSize}
+              totalItems={pedidosFiltrados.length}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+            />
+          </>
         )}
       </div>
     </div>

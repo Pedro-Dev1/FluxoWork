@@ -3,6 +3,7 @@ import { listarEquipes } from "@/app/actions/equipes"
 import { getSession } from "@/lib/session"
 import { redirect } from "next/navigation"
 import { HistoricoCompletoList } from "@/components/historico-completo-list"
+import { PageHeader } from "@/components/ui/page-header"
 
 export default async function HistoricoCompletoPage() {
   const session = await getSession()
@@ -19,14 +20,14 @@ export default async function HistoricoCompletoPage() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">Histórico Completo de Pedidos</h1>
-        <p className="text-muted-foreground">
-          {session.tipoAcesso === "Gerente"
+      <PageHeader
+        title="Histórico completo de pedidos"
+        description={
+          session.tipoAcesso === "Gerente"
             ? "Visualize todos os pedidos das suas equipes"
-            : "Visualize todos os pedidos de pagamento do sistema"}
-        </p>
-      </div>
+            : "Visualize todos os pedidos de pagamento do sistema"
+        }
+      />
 
       <HistoricoCompletoList pedidos={pedidos} equipes={equipes} />
     </div>

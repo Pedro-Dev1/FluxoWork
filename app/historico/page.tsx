@@ -4,6 +4,7 @@ import { HistoricoList } from "@/components/historico-list"
 import { redirect } from "next/navigation"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { CorrecaoList } from "@/components/correcao-list"
+import { PageHeader } from "@/components/ui/page-header"
 
 export default async function HistoricoPage() {
   const session = await getSession()
@@ -28,29 +29,32 @@ export default async function HistoricoPage() {
 
   return (
     <div className="container mx-auto px-4 lg:px-6 py-8">
-      <div className="mb-8">
-        <h1 className="text-2xl font-semibold mb-1 text-foreground">Meus Pedidos</h1>
-        <p className="text-sm text-muted-foreground">Acompanhe o status de todos os pedidos de pagamento que voce criou</p>
-      </div>
+      <PageHeader title="Meus pedidos" description="Acompanhe o status de todos os pedidos de pagamento que você criou" />
 
       <Tabs defaultValue="historico" className="w-full">
-        <TabsList className="grid w-full max-w-md grid-cols-2 h-10">
-          <TabsTrigger value="historico" className="text-sm">Historico</TabsTrigger>
-          <TabsTrigger value="correcoes" className="relative text-sm">
-            Correcoes Pendentes
+        <TabsList className="h-auto w-full justify-start rounded-none bg-transparent p-0 border-b border-border gap-6">
+          <TabsTrigger
+            value="historico"
+            className="rounded-none border-b-2 border-transparent px-0 pb-3 text-sm font-medium text-text-tertiary shadow-none data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:bg-transparent"
+          >
+            Histórico
+          </TabsTrigger>
+          <TabsTrigger
+            value="correcoes"
+            className="rounded-none border-b-2 border-transparent px-0 pb-3 text-sm font-medium text-text-tertiary shadow-none data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:bg-transparent"
+          >
+            Correções pendentes
             {pedidosCorrecao.length > 0 && (
-              <span className="ml-2 inline-flex items-center justify-center w-5 h-5 text-xs font-semibold text-background bg-foreground rounded">
-                {pedidosCorrecao.length}
-              </span>
+              <span className="ml-1.5 text-xs tabular-nums text-text-tertiary">{pedidosCorrecao.length}</span>
             )}
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="historico" className="mt-6">
+        <TabsContent value="historico" className="mt-5">
           <HistoricoList pedidos={pedidos} />
         </TabsContent>
 
-        <TabsContent value="correcoes" className="mt-6">
+        <TabsContent value="correcoes" className="mt-5">
           <CorrecaoList pedidos={pedidosCorrecao} />
         </TabsContent>
       </Tabs>

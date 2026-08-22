@@ -2,7 +2,6 @@
 
 import type { PedidoPagamento } from "@/types/pedido"
 import { Card } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -14,6 +13,7 @@ import { useState } from "react"
 import { corrigirPedido } from "@/app/actions/pedidos"
 import { useRouter } from "next/navigation"
 import { calcularComposicaoPedido } from "@/lib/domain/calculo-financeiro"
+import { EmptyState } from "@/components/ui/empty-state"
 
 interface CorrecaoListProps {
   pedidos: PedidoPagamento[]
@@ -75,12 +75,7 @@ export function CorrecaoList({ pedidos }: CorrecaoListProps) {
   }
 
   if (pedidos.length === 0) {
-    return (
-      <Card className="p-8 text-center">
-        <AlertCircle className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-        <p className="text-muted-foreground">Nenhum pedido aguardando correção</p>
-      </Card>
-    )
+    return <EmptyState title="Nenhum pedido aguardando correção" />
   }
 
   return (
@@ -126,45 +121,39 @@ export function CorrecaoList({ pedidos }: CorrecaoListProps) {
         const criadoPor = pedido.criado_por?.nome_completo || "N/A"
 
         return (
-          <Card key={pedido.id} className="p-6 border-orange-200 dark:border-orange-800">
+          <Card key={pedido.id} className="p-6 border-l-4 border-l-warning border-border">
             <div className="flex items-start justify-between mb-4">
               <div>
-                <h3 className="font-semibold text-lg">{colaboradorNome}</h3>
+                <h3 className="font-semibold text-lg text-foreground">{colaboradorNome}</h3>
                 <div className="flex flex-col gap-1 mt-1">
-                  <p className="text-sm text-muted-foreground flex items-center gap-1">
+                  <p className="text-sm text-text-tertiary flex items-center gap-1">
                     <User className="w-3 h-3" />
                     Criado por {criadoPor}
                   </p>
-                  <p className="text-sm text-muted-foreground flex items-center gap-1">
+                  <p className="text-sm text-text-tertiary flex items-center gap-1">
                     <Clock className="w-3 h-3" />
                     {dataFormatada} às {horaFormatada}
                   </p>
                 </div>
               </div>
-              <Badge variant="outline" className="border-orange-500 text-orange-700 dark:text-orange-400">
-                <AlertCircle className="w-3 h-3 mr-1" />
-                Correção Solicitada
-              </Badge>
+              <span className="inline-flex items-center gap-1 rounded-control px-2 py-0.5 text-xs font-medium bg-warning-subtle text-warning whitespace-nowrap">
+                <AlertCircle className="w-3 h-3" />
+                Correção solicitada
+              </span>
             </div>
 
             {pedido.observacao_gerente && (
-              <Alert className="mb-4 border-blue-200 bg-blue-50 dark:bg-blue-950 dark:border-blue-800">
-                <AlertDescription>
-                  <p className="font-medium text-sm mb-1 text-blue-900 dark:text-blue-100">Observação do Gerente:</p>
-                  <p className="text-sm text-blue-800 dark:text-blue-200">{pedido.observacao_gerente}</p>
-                </AlertDescription>
-              </Alert>
+              <div className="mb-4 rounded-control bg-surface px-3 py-2">
+                <p className="text-xs text-text-tertiary mb-0.5">Observação do gerente</p>
+                <p className="text-sm text-text-secondary">{pedido.observacao_gerente}</p>
+              </div>
             )}
 
             {pedido.observacao_financeiro && (
-              <Alert className="mb-4 border-green-200 bg-green-50 dark:bg-green-950 dark:border-green-800">
-                <AlertDescription>
-                  <p className="font-medium text-sm mb-1 text-green-900 dark:text-green-100">
-                    Observação do Financeiro:
-                  </p>
-                  <p className="text-sm text-green-800 dark:text-green-200">{pedido.observacao_financeiro}</p>
-                </AlertDescription>
-              </Alert>
+              <div className="mb-4 rounded-control bg-surface px-3 py-2">
+                <p className="text-xs text-text-tertiary mb-0.5">Observação do financeiro</p>
+                <p className="text-sm text-text-secondary">{pedido.observacao_financeiro}</p>
+              </div>
             )}
 
             {/* Campo de Resposta */}
