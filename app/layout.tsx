@@ -46,7 +46,7 @@ export default async function RootLayout({
         <ValoresVisibilityProvider>
           {!isAuthPage && <SidebarNavigation tipoAcesso={session?.tipoAcesso} />}
 
-          <div className={cn("min-h-screen", !isAuthPage && "lg:pl-60")}>
+          <div className={cn("min-h-screen", !isAuthPage && "lg:pl-56")}>
             {!isAuthPage && session && (
               <UserHeader
                 nomeCompleto={session.nomeCompleto}
