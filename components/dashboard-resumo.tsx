@@ -122,6 +122,34 @@ export function DashboardResumo({
     }
   }, [pedidos])
 
+  // Composição: soma bruta de cada tipo de gasto no conjunto filtrado — a
+  // mesma informação que existia como cards separados antes do redesenho,
+  // agora como uma faixa de detalhe em vez de métricas de topo.
+  const composicao = useMemo(() => {
+    let salario = 0
+    let horasExtras = 0
+    let reembolsoKm = 0
+    let plantao = 0
+    let conducao = 0
+    let comissao = 0
+
+    pedidos.forEach((p) => {
+      if (p.tipo_pedido === "reembolso_km") {
+        reembolsoKm += p.valor_km || 0
+      } else {
+        const colab = colaboradorDe(p) as any
+        salario += p.salario_base ?? colab?.salario ?? 0
+        horasExtras += p.horas_extras || 0
+        reembolsoKm += p.valor_km || 0
+        plantao += p.valor_plantao || 0
+        conducao += p.conducao || 0
+        comissao += p.comissao || 0
+      }
+    })
+
+    return { salario, horasExtras, reembolsoKm, plantao, conducao, comissao }
+  }, [pedidos])
+
   // Evolução mensal: solicitado (tudo) x aprovado+ (aprovado/nota_recebida/pago) x pago
   const evolucaoMensal = useMemo(() => {
     const meses = new Map<string, { label: string; solicitado: number; aprovado: number; pago: number }>()
@@ -273,6 +301,23 @@ export function DashboardResumo({
         </Card>
       </div>
 
+      {/* Composição: o detalhamento de gastos (salário, HE, KM, plantão, condução,
+          comissão) do conjunto filtrado — mesma régua fina do corte, sem virar
+          card-por-tipo de novo. */}
+      <Card className="border shadow-none">
+        <div className="p-5">
+          <p className="text-xs font-medium text-muted-foreground mb-3">Composição do período</p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+            <ComposicaoItem label="Salário" valor={composicao.salario} formatValue={tooltipValor} />
+            <ComposicaoItem label="Horas Extras" valor={composicao.horasExtras} formatValue={tooltipValor} />
+            <ComposicaoItem label="Reembolso KM" valor={composicao.reembolsoKm} formatValue={tooltipValor} />
+            <ComposicaoItem label="Plantão" valor={composicao.plantao} formatValue={tooltipValor} />
+            <ComposicaoItem label="Condução" valor={composicao.conducao} formatValue={tooltipValor} />
+            <ComposicaoItem label="Comissão" valor={composicao.comissao} formatValue={tooltipValor} />
+          </div>
+        </div>
+      </Card>
+
       {/* Bloco 4: cortes — um card só, dividido por régua fina, não três caixas iguais */}
       <Card className="border shadow-none">
         <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-border">
@@ -281,6 +326,23 @@ export function DashboardResumo({
           <CorteColuna titulo="Por centro de custo" itens={cortes.centrosCusto} formatValue={tooltipValor} />
         </div>
       </Card>
+    </div>
+  )
+}
+
+function ComposicaoItem({
+  label,
+  valor,
+  formatValue,
+}: {
+  label: string
+  valor: number
+  formatValue: (v: number) => string
+}) {
+  return (
+    <div>
+      <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
+      <p className="text-sm font-semibold tabular-nums text-foreground">{formatValue(valor)}</p>
     </div>
   )
 }

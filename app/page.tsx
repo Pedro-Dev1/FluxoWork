@@ -10,8 +10,8 @@ import {
 import { listarEquipes, listarEquipesPorGerente } from "./actions/equipes"
 import { getSession } from "@/lib/session"
 import { redirect } from "next/navigation"
-import { DashboardAnalytics } from "@/components/dashboard-analytics"
-import { DashboardResumo, type AcaoAgoraItem } from "@/components/dashboard-resumo"
+import { DashboardClient } from "@/components/dashboard-client"
+import type { AcaoAgoraItem } from "@/components/dashboard-resumo"
 import { SystemControl } from "@/components/system-control"
 
 export default async function Home() {
@@ -91,7 +91,7 @@ export default async function Home() {
         <p className="text-sm text-muted-foreground">Visão geral de pagamentos e pedidos</p>
       </div>
 
-      <DashboardResumo
+      <DashboardClient
         pedidos={pedidos}
         equipes={equipes}
         tipoAcesso={session?.tipoAcesso || ""}
@@ -112,10 +112,6 @@ export default async function Home() {
           <SystemControl />
         </div>
       )}
-
-      <div className="mt-6">
-        <DashboardAnalytics pedidos={pedidos} equipes={equipes} />
-      </div>
     </div>
   )
 }
