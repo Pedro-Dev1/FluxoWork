@@ -24,7 +24,7 @@ import {
 import type { PedidoPagamento } from "@/types/pedido"
 import { useRouter } from "next/navigation"
 import { listarEquipes } from "@/app/actions/equipes"
-import { aprovarNotaFiscal, recusarNotaFiscal } from "@/app/actions/pedidos"
+import { aprovarNotaFiscal, recusarNotaFiscal, marcarPedidoPago } from "@/app/actions/pedidos"
 import type { Equipe } from "@/types/equipe"
 import { useMaskedCurrency } from "@/components/currency-display"
 import { useSystemStatus } from "./system-status-provider"
@@ -42,6 +42,7 @@ export function MarcarPagoList({ pedidos }: MarcarPagoListProps) {
   const [equipes, setEquipes] = useState<Equipe[]>([])
   const [approvingId, setApprovingId] = useState<string | null>(null)
   const [rejectingId, setRejectingId] = useState<string | null>(null)
+  const [payingId, setPayingId] = useState<string | null>(null)
   const [motivoRecusa, setMotivoRecusa] = useState<Record<string, string>>({})
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [filtros, setFiltros] = useState({
@@ -111,6 +112,25 @@ export function MarcarPagoList({ pedidos }: MarcarPagoListProps) {
       alert(error instanceof Error ? error.message : "Erro ao recusar nota fiscal")
     } finally {
       setRejectingId(null)
+    }
+  }
+
+  const handleMarcarPago = async (pedidoId: string) => {
+    if (isSystemSuspended) {
+      setSuspendedDialogOpen(true)
+      return
+    }
+    if (!confirm("Confirma que este pedido foi pago?")) return
+    try {
+      setPayingId(pedidoId)
+      await marcarPedidoPago(pedidoId)
+      alert("Pedido marcado como pago!")
+      router.refresh()
+    } catch (error) {
+      console.error("[v0] Erro ao marcar como pago:", error)
+      alert(error instanceof Error ? error.message : "Erro ao marcar pedido como pago")
+    } finally {
+      setPayingId(null)
     }
   }
 
@@ -215,7 +235,7 @@ export function MarcarPagoList({ pedidos }: MarcarPagoListProps) {
           const isReembolsoKm = pedido.tipo_pedido === "reembolso_km"
           const valorEsperadoNF = isReembolsoKm
             ? pedido.valor_km
-            : (pedido.colaborador?.salario || 0) +
+            : (pedido.salario_base ?? pedido.colaborador?.salario ?? 0) +
               (pedido.horas_extras || 0) +
               (pedido.valor_plantao || 0) +
               (pedido.comissao || 0) -
@@ -317,7 +337,7 @@ export function MarcarPagoList({ pedidos }: MarcarPagoListProps) {
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs bg-muted/30 p-2 rounded">
                         <div>
                           <span className="text-muted-foreground block">Salario</span>
-                          <span className="font-semibold">{formatValue(pedido.colaborador?.salario || 0)}</span>
+                          <span className="font-semibold">{formatValue(pedido.salario_base ?? pedido.colaborador?.salario ?? 0)}</span>
                         </div>
                         <div>
                           <span className="text-muted-foreground block">Horas Extras</span>
@@ -374,15 +394,35 @@ export function MarcarPagoList({ pedidos }: MarcarPagoListProps) {
                     </div>
                   </div>
 
-                  {pedido.status === "nota_recebida" || pedido.status === "pago" ? (
+                  {pedido.status === "pago" ? (
                     <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
                       <div className="flex items-center gap-2 text-green-700">
                         <CheckCircle className="w-5 h-5" />
-                        <span className="font-medium">
-                          {pedido.status === "pago" ? "Pagamento Concluído" : "Nota Recebida - Aguardando Pagamento"}
-                        </span>
+                        <span className="font-medium">Pagamento Concluído</span>
                       </div>
                     </div>
+                  ) : isReembolsoKm ? (
+                    // Reembolso KM não tem nota fiscal — vai direto de "aprovado" pra "pago",
+                    // sem passar pelas etapas de Nota Recebida/Recusar Nota.
+                    <Button
+                      onClick={() => handleMarcarPago(pedido.id)}
+                      disabled={payingId === pedido.id}
+                      className="bg-green-600 hover:bg-green-700 text-white h-9 w-full"
+                      size="sm"
+                    >
+                      <CreditCard className="w-4 h-4 mr-1.5" />
+                      {payingId === pedido.id ? "Processando..." : "Marcar como Pago"}
+                    </Button>
+                  ) : pedido.status === "nota_recebida" ? (
+                    <Button
+                      onClick={() => handleMarcarPago(pedido.id)}
+                      disabled={payingId === pedido.id}
+                      className="bg-green-600 hover:bg-green-700 text-white h-9 w-full"
+                      size="sm"
+                    >
+                      <CreditCard className="w-4 h-4 mr-1.5" />
+                      {payingId === pedido.id ? "Processando..." : "Marcar como Pago"}
+                    </Button>
                   ) : (
                     <div className="space-y-2">
                       <div className="space-y-1.5">

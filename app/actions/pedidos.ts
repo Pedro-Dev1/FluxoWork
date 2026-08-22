@@ -5,6 +5,7 @@ import type { NovoPedido, AcaoPedido } from "@/types/pedido"
 import { revalidatePath } from "next/cache"
 import { getSession } from "@/lib/session"
 import { put } from "@vercel/blob"
+import { calcularComposicaoPedido, calcularComposicaoReembolsoKm } from "@/lib/domain/calculo-financeiro"
 
 export async function criarPedido(data: NovoPedido) {
   const supabase = await getSupabaseServerClient()
@@ -39,9 +40,10 @@ export async function criarPedido(data: NovoPedido) {
 
   let valorTotal = 0
   let valorTotalHorasExtras = 0
+  let salarioBaseUsado = 0
 
   if (data.tipo_pedido === "reembolso_km") {
-    valorTotal = data.valor_km
+    valorTotal = calcularComposicaoReembolsoKm(data.valor_km).valorTotal
     valorTotalHorasExtras = 0
   } else {
     const { data: colaborador, error: colaboradorError } = await supabase
@@ -55,21 +57,19 @@ export async function criarPedido(data: NovoPedido) {
       throw new Error("Colaborador não encontrado")
     }
 
-    const valorHoraNormal = colaborador.salario / 220
-    const valorHora50 = valorHoraNormal * 1.5
-    const valorHora100 = valorHoraNormal * 2
-
-    const valorHorasExtras50 = data.horas_extras_50 * valorHora50
-    const valorHorasExtras100 = data.horas_extras_100 * valorHora100
-    valorTotalHorasExtras = valorHorasExtras50 + valorHorasExtras100
+    salarioBaseUsado = colaborador.salario
 
     // Condução e KM ficam fora do valor da nota (aparecem mas não calculam)
-    valorTotal =
-      colaborador.salario +
-      valorTotalHorasExtras +
-      data.valor_plantao +
-      (data.comissao || 0) -
-      (data.valor_desconto || 0)
+    const composicao = calcularComposicaoPedido({
+      salarioBase: colaborador.salario,
+      horasExtras50: data.horas_extras_50,
+      horasExtras100: data.horas_extras_100,
+      valorPlantao: data.valor_plantao,
+      comissao: data.comissao || 0,
+      valorDesconto: data.valor_desconto || 0,
+    })
+    valorTotalHorasExtras = composicao.valorHorasExtras
+    valorTotal = composicao.valorTotal
   }
 
   // Gerente e Financeiro pulam aprovacao do gerente
@@ -93,6 +93,7 @@ export async function criarPedido(data: NovoPedido) {
           valor_desconto: 0,
           motivo_desconto: null,
           valor_total: valorTotal,
+          salario_base: 0,
           status: statusInicial,
           criado_por_colaborador_id: session.colaboradorId,
         }
@@ -112,6 +113,7 @@ export async function criarPedido(data: NovoPedido) {
           valor_desconto: data.valor_desconto || 0,
           motivo_desconto: data.motivo_desconto || null,
           valor_total: valorTotal,
+          salario_base: salarioBaseUsado,
           status: statusInicial,
           criado_por_colaborador_id: session.colaboradorId,
         }
@@ -635,18 +637,22 @@ export async function corrigirPedido(
     throw new Error("Você só pode corrigir pedidos que você criou")
   }
 
-  const valorHoraNormal = pedidoAtual.colaborador.salario / 220
-  const valorHorasExtras50 = data.horas_extras_50 * valorHoraNormal * 1.5
-  const valorHorasExtras100 = data.horas_extras_100 * valorHoraNormal * 2
-  const valorTotalHorasExtras = valorHorasExtras50 + valorHorasExtras100
+  // Usa o salário congelado no momento da criação do pedido (salario_base), nunca o
+  // salário atual do colaborador — senão um reajuste salarial posterior recalcula
+  // (e infla/reduz) o valor_total de pedidos antigos ao corrigi-los.
+  const salarioBase = pedidoAtual.salario_base ?? pedidoAtual.colaborador.salario
 
   // Condução e KM ficam fora do valor da nota (aparecem mas não calculam)
-  const valorTotal =
-    pedidoAtual.colaborador.salario +
-    valorTotalHorasExtras +
-    data.valor_plantao +
-    (data.comissao || 0) -
-    data.valor_desconto
+  const composicao = calcularComposicaoPedido({
+    salarioBase,
+    horasExtras50: data.horas_extras_50,
+    horasExtras100: data.horas_extras_100,
+    valorPlantao: data.valor_plantao,
+    comissao: data.comissao || 0,
+    valorDesconto: data.valor_desconto,
+  })
+  const valorTotalHorasExtras = composicao.valorHorasExtras
+  const valorTotal = composicao.valorTotal
 
   // Determinar para qual status enviar baseado em quem solicitou a correção
   let novoStatus = "pendente_gerente"
@@ -1325,6 +1331,48 @@ export async function recusarNotaFiscal(pedidoId: string, motivo: string) {
   } catch (err) {
     console.error("[v0] Exceção ao recusar nota fiscal:", err)
     throw err instanceof Error ? err : new Error("Erro ao recusar nota fiscal")
+  }
+
+  revalidatePath("/financeiro")
+  revalidatePath("/meus-pagamentos")
+
+  return { success: true }
+}
+
+export async function marcarPedidoPago(pedidoId: string) {
+  const supabase = await getSupabaseServerClient()
+
+  const session = await getSession()
+  if (!session) {
+    throw new Error("Usuário não autenticado")
+  }
+
+  if (!["Financeiro", "Adm"].includes(session.tipoAcesso)) {
+    throw new Error("Apenas financeiro pode marcar pagamento")
+  }
+
+  const { data: pedido, error: pedidoError } = await supabase
+    .from("pedidos_pagamento")
+    .select("status, tipo_pedido")
+    .eq("id", pedidoId)
+    .single()
+
+  if (pedidoError || !pedido) {
+    throw new Error("Pedido não encontrado")
+  }
+
+  // Reembolso KM não tem nota fiscal — pula direto de "aprovado" pra "pago".
+  // Os demais precisam ter passado por "nota_recebida" antes.
+  const statusPermitidos = pedido.tipo_pedido === "reembolso_km" ? ["aprovado"] : ["nota_recebida"]
+  if (!statusPermitidos.includes(pedido.status)) {
+    throw new Error("Este pedido ainda não está pronto para ser marcado como pago")
+  }
+
+  const { error } = await supabase.from("pedidos_pagamento").update({ status: "pago" }).eq("id", pedidoId)
+
+  if (error) {
+    console.error("[v0] Erro ao marcar pedido como pago:", error)
+    throw new Error("Erro ao marcar pedido como pago")
   }
 
   revalidatePath("/financeiro")

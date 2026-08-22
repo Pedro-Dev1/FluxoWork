@@ -113,7 +113,7 @@ export function NotasPeriodoList({ pedidos }: NotasPeriodoListProps) {
           const isReembolsoKm = pedido.tipo_pedido === "reembolso_km"
           const valorNF = isReembolsoKm
             ? pedido.valor_km
-            : (pedido.colaborador?.salario || 0) +
+            : (pedido.salario_base ?? pedido.colaborador?.salario ?? 0) +
               (pedido.horas_extras || 0) +
               (pedido.valor_plantao || 0) +
               (pedido.comissao || 0) -
@@ -194,7 +194,7 @@ export function NotasPeriodoList({ pedidos }: NotasPeriodoListProps) {
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs bg-muted/30 p-2 rounded">
                         <div>
                           <span className="text-muted-foreground block">Salario</span>
-                          <span className="font-semibold">{formatValue(pedido.colaborador?.salario || 0)}</span>
+                          <span className="font-semibold">{formatValue(pedido.salario_base ?? pedido.colaborador?.salario ?? 0)}</span>
                         </div>
                         <div>
                           <span className="text-muted-foreground block">Horas Extras</span>

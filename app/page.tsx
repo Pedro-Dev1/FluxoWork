@@ -1,8 +1,17 @@
-import { listarPedidosComFiltros, listarPedidosPorSupervisor, listarPedidosPorGerente } from "./actions/pedidos"
+import {
+  listarPedidosComFiltros,
+  listarPedidosPorSupervisor,
+  listarPedidosPorGerente,
+  listarPedidosComNota,
+  listarPedidosSemNota,
+  listarSolicitacoesProrrogacao,
+  listarPedidosParaCorrecao,
+} from "./actions/pedidos"
 import { listarEquipes, listarEquipesPorGerente } from "./actions/equipes"
 import { getSession } from "@/lib/session"
 import { redirect } from "next/navigation"
 import { DashboardAnalytics } from "@/components/dashboard-analytics"
+import { DashboardResumo, type AcaoAgoraItem } from "@/components/dashboard-resumo"
 import { SystemControl } from "@/components/system-control"
 
 export default async function Home() {
@@ -39,20 +48,74 @@ export default async function Home() {
 
   const isAdmin = session?.tipoAcesso === "Adm"
 
+  // "Requer ação agora": o que precisa da decisão de quem está logado, hoje.
+  // Muda de fonte conforme o papel — cada um age sobre uma fila diferente.
+  let acaoAgoraItens: AcaoAgoraItem[] = []
+  let acaoAgoraCandidatos: any[] = []
+
+  try {
+    if (session?.tipoAcesso === "Adm" || session?.tipoAcesso === "Financeiro") {
+      const [comNota, semNota, prorrogacoes] = await Promise.all([
+        listarPedidosComNota(),
+        listarPedidosSemNota(),
+        listarSolicitacoesProrrogacao(),
+      ])
+      acaoAgoraItens = [
+        { label: "notas recebidas p/ pagar", count: comNota.length, href: "/financeiro?tab=pagar" },
+        { label: "sem nota fiscal", count: semNota.length, href: "/financeiro?tab=sem-nota" },
+        { label: "prorrogações", count: prorrogacoes.length, href: "/financeiro?tab=prorrogacoes" },
+      ]
+      acaoAgoraCandidatos = [...comNota, ...semNota]
+    } else if (session?.tipoAcesso === "Gerente") {
+      const pendentes = pedidos.filter((p) => p.status === "pendente_gerente")
+      acaoAgoraItens = [{ label: "aguardando sua aprovação", count: pendentes.length, href: "/aprovacoes" }]
+      acaoAgoraCandidatos = pendentes
+    } else if (session?.tipoAcesso === "Supervisor") {
+      const correcao = await listarPedidosParaCorrecao()
+      acaoAgoraItens = [{ label: "em correção — precisam ser reenviados", count: correcao.length, href: "/pedidos" }]
+      acaoAgoraCandidatos = correcao
+    }
+  } catch (error) {
+    console.error("[v0] Erro ao montar resumo de ação agora:", error)
+  }
+
+  const maisAntigo = acaoAgoraCandidatos.reduce<any>((oldest, atual) => {
+    if (!oldest) return atual
+    return new Date(atual.created_at) < new Date(oldest.created_at) ? atual : oldest
+  }, null)
+
   return (
     <div className="container mx-auto py-8 px-4 lg:px-6 max-w-7xl">
       <div className="mb-8">
         <h1 className="text-2xl font-semibold mb-1 text-foreground">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">Visao geral de pagamentos e pedidos</p>
+        <p className="text-sm text-muted-foreground">Visão geral de pagamentos e pedidos</p>
       </div>
 
+      <DashboardResumo
+        pedidos={pedidos}
+        equipes={equipes}
+        tipoAcesso={session?.tipoAcesso || ""}
+        acaoAgoraItens={acaoAgoraItens}
+        acaoAgoraMaisAntigo={
+          maisAntigo
+            ? {
+                nome: maisAntigo.colaborador?.nome_completo || maisAntigo.colaboradores?.nome_completo || "N/A",
+                tipo: maisAntigo.tipo_pedido === "reembolso_km" ? "Reembolso KM" : "Pedido Completo",
+                createdAt: maisAntigo.created_at,
+              }
+            : null
+        }
+      />
+
       {isAdmin && (
-        <div className="mb-8">
+        <div className="mt-6">
           <SystemControl />
         </div>
       )}
 
-      <DashboardAnalytics pedidos={pedidos} equipes={equipes} />
+      <div className="mt-6">
+        <DashboardAnalytics pedidos={pedidos} equipes={equipes} />
+      </div>
     </div>
   )
 }

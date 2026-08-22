@@ -51,8 +51,8 @@ export default async function RootLayout({
               <UserHeader
                 nomeCompleto={session.nomeCompleto}
                 email={session.email}
-                cnpj={session.cnpj}
-                salario={session.salario}
+                cnpj={session.tipoAcesso === "Colaborador" ? session.cnpj : undefined}
+                salario={session.tipoAcesso === "Colaborador" ? session.salario : undefined}
               />
             )}
             <main className={cn("transition-all duration-300", !isAuthPage && session && "pt-14 lg:pt-0", !isAuthPage && !session && "pt-14 lg:pt-0")}>

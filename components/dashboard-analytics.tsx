@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { Fragment, useState, useMemo } from "react"
 import type { PedidoPagamento } from "@/types/pedido"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -9,34 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useMaskedCurrency } from "@/components/currency-display"
-import {
-  DollarSign,
-  Clock,
-  Car,
-  Bus,
-  Briefcase,
-  TrendingUp,
-  Calendar,
-  Search,
-  Download,
-  ChevronDown,
-  ChevronUp,
-  Receipt,
-  Filter,
-} from "lucide-react"
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-} from "recharts"
+import { Search, Download, ChevronDown, ChevronUp, Receipt, Filter } from "lucide-react"
 
 interface DashboardAnalyticsProps {
   pedidos: PedidoPagamento[]
@@ -61,16 +34,6 @@ const STATUS_COLORS: Record<string, string> = {
   correcao: "bg-orange-50 text-orange-800 border-orange-200",
   pago: "bg-green-50 text-green-800 border-green-200",
   nota_recebida: "bg-teal-50 text-teal-800 border-teal-200",
-}
-
-const PIE_COLORS = ["#171717", "#404040", "#737373", "#a3a3a3", "#d4d4d4"]
-
-const TIPO_LABELS: Record<string, string> = {
-  salario: "Salario",
-  horas_extras: "Horas Extras",
-  reembolso_km: "Reembolso KM",
-  plantao: "Plantao",
-  conducao: "Conducao",
 }
 
 function formatDateBR(dateString: string) {
@@ -183,88 +146,6 @@ export function DashboardAnalytics({ pedidos, equipes }: DashboardAnalyticsProps
     return result
   }, [pedidos, dataInicio, dataFim, busca, statusFilter, tipoFilter, equipeFilter, sortField, sortAsc])
 
-  // KPI calculations
-  const kpis = useMemo(() => {
-    const total = filteredPedidos.reduce((s, p) => s + p.valor_total, 0)
-    const salarios = filteredPedidos
-      .filter((p) => p.tipo_pedido !== "reembolso_km")
-      .reduce((s, p) => {
-        const colab = p.colaborador || p.colaboradores
-        return s + (colab?.salario || 0)
-      }, 0)
-    const horasExtras = filteredPedidos.reduce((s, p) => {
-      const val50 = (p.horas_extras_50 || 0) * ((p.colaborador?.salario || p.colaboradores?.salario || 0) / 220) * 1.5
-      const val100 =
-        (p.horas_extras_100 || 0) * ((p.colaborador?.salario || p.colaboradores?.salario || 0) / 220) * 2.0
-      return s + val50 + val100
-    }, 0)
-    const reembolsoKm = filteredPedidos.reduce((s, p) => s + (p.valor_km || 0), 0)
-    const plantao = filteredPedidos.reduce((s, p) => s + (p.valor_plantao || 0), 0)
-    const conducao = filteredPedidos.reduce((s, p) => s + (p.conducao || 0), 0)
-    const comissao = filteredPedidos.reduce((s, p) => s + (p.comissao || 0), 0)
-    const pagos = filteredPedidos.filter((p) => p.status === "pago").length
-    const pendentes = filteredPedidos.filter((p) =>
-      ["pendente_gerente", "pendente_financeiro"].includes(p.status),
-    ).length
-
-    return { total, salarios, horasExtras, reembolsoKm, plantao, conducao, comissao, pagos, pendentes, count: filteredPedidos.length }
-  }, [filteredPedidos])
-
-  // Monthly chart data
-  const monthlyData = useMemo(() => {
-    const months: Record<string, { mes: string; salario: number; horas_extras: number; reembolso_km: number; plantao: number; conducao: number }> = {}
-
-    filteredPedidos.forEach((p) => {
-      const d = new Date(p.created_at)
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
-      const label = d.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" })
-
-      if (!months[key]) {
-        months[key] = { mes: label, salario: 0, horas_extras: 0, reembolso_km: 0, plantao: 0, conducao: 0 }
-      }
-
-      if (p.tipo_pedido === "reembolso_km") {
-        months[key].reembolso_km += p.valor_km || 0
-      } else {
-        const colab = p.colaborador || p.colaboradores
-        months[key].salario += colab?.salario || 0
-        const val50 = (p.horas_extras_50 || 0) * ((colab?.salario || 0) / 220) * 1.5
-        const val100 = (p.horas_extras_100 || 0) * ((colab?.salario || 0) / 220) * 2.0
-        months[key].horas_extras += val50 + val100
-        months[key].reembolso_km += p.valor_km || 0
-        months[key].plantao += p.valor_plantao || 0
-        months[key].conducao += p.conducao || 0
-      }
-    })
-
-    return Object.entries(months)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([, v]) => v)
-  }, [filteredPedidos])
-
-  // Pie chart data
-  const pieData = useMemo(() => {
-    const items = [
-      { name: "Salario", value: kpis.salarios },
-      { name: "Horas Extras", value: kpis.horasExtras },
-      { name: "Reembolso KM", value: kpis.reembolsoKm },
-      { name: "Plantao", value: kpis.plantao },
-      { name: "Conducao", value: kpis.conducao },
-    ].filter((i) => i.value > 0)
-    return items
-  }, [kpis])
-
-  // Days with payment
-  const diasComPagamento = useMemo(() => {
-    const days = new Set<string>()
-    filteredPedidos
-      .filter((p) => p.status === "pago")
-      .forEach((p) => {
-        days.add(new Date(p.created_at).toLocaleDateString("pt-BR"))
-      })
-    return days.size
-  }, [filteredPedidos])
-
   const handleSort = (field: string) => {
     if (sortField === field) {
       setSortAsc(!sortAsc)
@@ -319,12 +200,10 @@ export function DashboardAnalytics({ pedidos, equipes }: DashboardAnalyticsProps
       const equipeNome = (colab as any)?.equipe?.nome || ""
       const ccNome = (colab as any)?.centro_custo ? `${(colab as any).centro_custo.numero} - ${(colab as any).centro_custo.nome}` : ""
       const tipo = p.tipo_pedido === "reembolso_km" ? "Reembolso KM" : "Completo"
-      const salarioBase = p.tipo_pedido === "reembolso_km" ? 0 : (colab?.salario || 0)
+      const salarioBase = p.tipo_pedido === "reembolso_km" ? 0 : (p.salario_base ?? colab?.salario ?? 0)
       const he50h = p.horas_extras_50 || 0
       const he100h = p.horas_extras_100 || 0
-      const valorHe =
-        he50h * ((colab?.salario || 0) / 220) * 1.5 +
-        he100h * ((colab?.salario || 0) / 220) * 2
+      const valorHe = p.horas_extras || 0
       const criadoPor = p.criado_por?.nome_completo || ""
       const previsao = p.data_previsao_pagamento ? formatDateBR(p.data_previsao_pagamento) : ""
 
@@ -368,167 +247,8 @@ export function DashboardAnalytics({ pedidos, equipes }: DashboardAnalyticsProps
     URL.revokeObjectURL(url)
   }
 
-  const formatTooltip = (value: number) => {
-    if (!valoresVisiveis) return "R$ ------"
-    return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value)
-  }
-
   return (
     <div className="space-y-6">
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <Card className="border shadow-none">
-          <CardContent className="pt-5 pb-4 px-5">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="h-8 w-8 rounded bg-muted flex items-center justify-center">
-                <Receipt className="h-4 w-4 text-foreground" />
-              </div>
-            </div>
-            <p className="text-xs font-medium text-muted-foreground mb-1">Total Pedidos</p>
-            <p className="text-2xl font-semibold text-foreground tabular-nums">{kpis.count}</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              {kpis.pagos} pagos / {kpis.pendentes} pendentes
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border shadow-none">
-          <CardContent className="pt-5 pb-4 px-5">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="h-8 w-8 rounded bg-muted flex items-center justify-center">
-                <DollarSign className="h-4 w-4 text-foreground" />
-              </div>
-            </div>
-            <p className="text-xs font-medium text-muted-foreground mb-1">Valor Total</p>
-            <p className="text-xl font-semibold text-foreground tabular-nums">{formatValue(kpis.total)}</p>
-            <p className="text-xs text-muted-foreground mt-1">{diasComPagamento} dias com pagamento</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border shadow-none">
-          <CardContent className="pt-5 pb-4 px-5">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="h-8 w-8 rounded bg-muted flex items-center justify-center">
-                <Briefcase className="h-4 w-4 text-foreground" />
-              </div>
-            </div>
-            <p className="text-xs font-medium text-muted-foreground mb-1">Salarios</p>
-            <p className="text-xl font-semibold text-foreground tabular-nums">{formatValue(kpis.salarios)}</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border shadow-none">
-          <CardContent className="pt-5 pb-4 px-5">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="h-8 w-8 rounded bg-muted flex items-center justify-center">
-                <Clock className="h-4 w-4 text-foreground" />
-              </div>
-            </div>
-            <p className="text-xs font-medium text-muted-foreground mb-1">Horas Extras</p>
-            <p className="text-xl font-semibold text-foreground tabular-nums">{formatValue(kpis.horasExtras)}</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border shadow-none">
-          <CardContent className="pt-5 pb-4 px-5">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="h-8 w-8 rounded bg-muted flex items-center justify-center">
-                <Car className="h-4 w-4 text-foreground" />
-              </div>
-            </div>
-            <p className="text-xs font-medium text-muted-foreground mb-1">Reembolso KM</p>
-            <p className="text-xl font-semibold text-foreground tabular-nums">{formatValue(kpis.reembolsoKm)}</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border shadow-none">
-          <CardContent className="pt-5 pb-4 px-5">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="h-8 w-8 rounded bg-muted flex items-center justify-center">
-                <Bus className="h-4 w-4 text-foreground" />
-              </div>
-            </div>
-            <p className="text-xs font-medium text-muted-foreground mb-1">{"Plantao + Conducao"}</p>
-            <p className="text-xl font-semibold text-foreground tabular-nums">{formatValue(kpis.plantao + kpis.conducao)}</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Card className="lg:col-span-2 border shadow-none">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-foreground flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-              Gastos Mensais por Tipo
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {monthlyData.length === 0 ? (
-              <div className="flex items-center justify-center h-[250px] text-muted-foreground text-sm">
-                Sem dados para o periodo selecionado
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={monthlyData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" opacity={0.5} />
-                  <XAxis dataKey="mes" fontSize={11} tickLine={false} axisLine={false} />
-                  <YAxis
-                    fontSize={11}
-                    tickLine={false}
-                    axisLine={false}
-                    tickFormatter={(v) => (valoresVisiveis ? `${(v / 1000).toFixed(0)}k` : "---")}
-                  />
-                  <Tooltip
-                    formatter={(value: number, name: string) => [formatTooltip(value), TIPO_LABELS[name] || name]}
-                    contentStyle={{ borderRadius: "8px", border: "1px solid #e2e8f0", fontSize: "12px" }}
-                  />
-                  <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: "11px" }} />
-                  <Bar dataKey="salario" name="salario" stackId="a" fill="#171717" radius={[0, 0, 0, 0]} />
-                  <Bar dataKey="horas_extras" name="horas_extras" stackId="a" fill="#404040" />
-                  <Bar dataKey="reembolso_km" name="reembolso_km" stackId="a" fill="#737373" />
-                  <Bar dataKey="plantao" name="plantao" stackId="a" fill="#a3a3a3" />
-                  <Bar dataKey="conducao" name="conducao" stackId="a" fill="#d4d4d4" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base font-semibold">Distribuicao por Tipo</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {pieData.length === 0 ? (
-              <div className="flex items-center justify-center h-[250px] text-muted-foreground text-sm">
-                Sem dados
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height={250}>
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={55}
-                    outerRadius={85}
-                    paddingAngle={3}
-                    dataKey="value"
-                  >
-                    {pieData.map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(value: number) => formatTooltip(value)} contentStyle={{ borderRadius: "8px", fontSize: "12px" }} />
-                  <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: "11px" }} />
-                </PieChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
       {/* Filters + Table */}
       <Card>
         <CardHeader className="pb-3">
@@ -561,7 +281,7 @@ export function DashboardAnalytics({ pedidos, equipes }: DashboardAnalyticsProps
               90 dias
             </Button>
             <Button variant="outline" size="sm" className="h-7 text-xs" onClick={setMonthPreset}>
-              Este mes
+              Este mês
             </Button>
             <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={clearFilters}>
               Limpar
@@ -571,7 +291,7 @@ export function DashboardAnalytics({ pedidos, equipes }: DashboardAnalyticsProps
           {showFilters && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mt-3 pt-3 border-t">
               <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Data inicio</label>
+                <label className="text-xs text-muted-foreground mb-1 block">Data início</label>
                 <Input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="h-8 text-sm" />
               </div>
               <div>
@@ -591,7 +311,7 @@ export function DashboardAnalytics({ pedidos, equipes }: DashboardAnalyticsProps
                     <SelectItem value="aprovado">Aprovado</SelectItem>
                     <SelectItem value="pago">Pago</SelectItem>
                     <SelectItem value="recusado">Recusado</SelectItem>
-                    <SelectItem value="correcao">Correcao</SelectItem>
+                    <SelectItem value="correcao">Correção</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -689,9 +409,8 @@ export function DashboardAnalytics({ pedidos, equipes }: DashboardAnalyticsProps
                       const tipo = p.tipo_pedido === "reembolso_km" ? "Reembolso KM" : "Completo"
 
                       return (
-                        <> 
+                        <Fragment key={p.id}>
                           <TableRow
-                            key={p.id}
                             className="cursor-pointer hover:bg-muted/30"
                             onClick={() => setExpandedRow(isExpanded ? null : p.id)}
                           >
@@ -727,8 +446,10 @@ export function DashboardAnalytics({ pedidos, equipes }: DashboardAnalyticsProps
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
                                   {p.tipo_pedido !== "reembolso_km" && (
                                     <div>
-                                      <span className="text-muted-foreground text-xs block">Salario Base</span>
-                                      <span className="font-medium">{formatValue(colab?.salario || 0)}</span>
+                                      <span className="text-muted-foreground text-xs block">Salário Base</span>
+                                      <span className="font-medium">
+                                        {formatValue(p.salario_base ?? colab?.salario ?? 0)}
+                                      </span>
                                     </div>
                                   )}
                                   {((p.horas_extras_50 || 0) > 0 || (p.horas_extras_100 || 0) > 0) && (
@@ -750,7 +471,7 @@ export function DashboardAnalytics({ pedidos, equipes }: DashboardAnalyticsProps
                                   )}
                                   {(p.valor_plantao || 0) > 0 && (
                                     <div>
-                                      <span className="text-muted-foreground text-xs block">Plantao</span>
+                                      <span className="text-muted-foreground text-xs block">Plantão</span>
                                       <span className="font-medium">{formatValue(p.valor_plantao)}</span>
                                       {p.motivo_plantao && (
                                         <span className="text-xs text-muted-foreground block">{p.motivo_plantao}</span>
@@ -759,13 +480,13 @@ export function DashboardAnalytics({ pedidos, equipes }: DashboardAnalyticsProps
                                   )}
                                   {(p.conducao || 0) > 0 && (
                                     <div>
-                                      <span className="text-muted-foreground text-xs block">Conducao</span>
+                                      <span className="text-muted-foreground text-xs block">Condução</span>
                                       <span className="font-medium">{formatValue(p.conducao)}</span>
                                     </div>
                                   )}
                                   {(p.comissao || 0) > 0 && (
                                     <div>
-                                      <span className="text-muted-foreground text-xs block">Comissao</span>
+                                      <span className="text-muted-foreground text-xs block">Comissão</span>
                                       <span className="font-medium">{formatValue(p.comissao || 0)}</span>
                                       {p.motivo_comissao && (
                                         <span className="text-xs text-muted-foreground block">{p.motivo_comissao}</span>
@@ -783,7 +504,7 @@ export function DashboardAnalytics({ pedidos, equipes }: DashboardAnalyticsProps
                                   )}
                                   {p.data_previsao_pagamento && (
                                     <div>
-                                      <span className="text-muted-foreground text-xs block">Previsao Pagamento</span>
+                                      <span className="text-muted-foreground text-xs block">Previsão Pagamento</span>
                                       <span className="font-medium">{formatDateBR(p.data_previsao_pagamento)}</span>
                                     </div>
                                   )}
@@ -809,7 +530,7 @@ export function DashboardAnalytics({ pedidos, equipes }: DashboardAnalyticsProps
                               </TableCell>
                             </TableRow>
                           )}
-                        </>
+                        </Fragment>
                       )
                     })
                   )}

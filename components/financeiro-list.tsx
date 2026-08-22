@@ -109,7 +109,7 @@ export function FinanceiroList({ pedidos }: FinanceiroListProps) {
 
         {pedidos.map((pedido) => {
           const isReembolsoKm = pedido.tipo_pedido === "reembolso_km"
-          const salarioBase = isReembolsoKm ? 0 : pedido.colaborador?.salario || 0
+          const salarioBase = isReembolsoKm ? 0 : pedido.salario_base ?? pedido.colaborador?.salario ?? 0
 
           return (
             <Card key={pedido.id} className="p-6">

@@ -302,7 +302,7 @@ export function HistoricoCompletoList({ pedidos: pedidosIniciais, equipes }: His
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                         <div>
                           <p className="text-muted-foreground">Salário Base</p>
-                          <p className="font-medium">{formatCurrency(pedido.colaborador?.salario || 0)}</p>
+                          <p className="font-medium">{formatCurrency(pedido.salario_base ?? pedido.colaborador?.salario ?? 0)}</p>
                         </div>
                         <div>
                           <p className="text-muted-foreground">Horas Extras</p>

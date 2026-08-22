@@ -73,7 +73,7 @@ export function AprovacaoItem({ pedido, tipoAcesso }: AprovacaoItemProps) {
   const status = getStatusBadge()
 
   const colaboradorNome = pedido.colaborador?.nome_completo || "N/A"
-  const colaboradorSalario = pedido.colaborador?.salario || 0
+  const colaboradorSalario = pedido.salario_base ?? pedido.colaborador?.salario ?? 0
 
   const isReembolsoKM = pedido.tipo_pedido === "reembolso_km"
 

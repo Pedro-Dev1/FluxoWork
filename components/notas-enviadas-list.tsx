@@ -263,7 +263,7 @@ export function NotasEnviadasList({ pedidos, canApprove = true }: NotasEnviadasL
           // Valor da NF = Salário + HE + Plantão + Comissão - Desconto (sem condução e KM)
           const valorEsperadoNF = isReembolsoKm
             ? pedido.valor_km
-            : (pedido.colaborador?.salario || 0) +
+            : (pedido.salario_base ?? pedido.colaborador?.salario ?? 0) +
               (pedido.horas_extras || 0) +
               (pedido.valor_plantao || 0) +
               (pedido.comissao || 0) -
@@ -373,7 +373,7 @@ export function NotasEnviadasList({ pedidos, canApprove = true }: NotasEnviadasL
                       <div>
                         <span className="text-muted-foreground block">Salário</span>
                         <span className="font-semibold">
-                          R$ {(pedido.colaborador?.salario || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                          R$ {(pedido.salario_base ?? pedido.colaborador?.salario ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                         </span>
                       </div>
                       <div>

@@ -13,6 +13,7 @@ import { AlertCircle, Save, Clock, User } from "lucide-react"
 import { useState } from "react"
 import { corrigirPedido } from "@/app/actions/pedidos"
 import { useRouter } from "next/navigation"
+import { calcularComposicaoPedido } from "@/lib/domain/calculo-financeiro"
 
 interface CorrecaoListProps {
   pedidos: PedidoPagamento[]
@@ -101,21 +102,23 @@ export function CorrecaoList({ pedidos }: CorrecaoListProps) {
         }
 
         const colaboradorNome = pedido.colaborador?.nome_completo || "N/A"
-        const colaboradorSalario = pedido.colaborador?.salario || 0
+        // Salário congelado na criação do pedido — nunca o salário atual do colaborador,
+        // senão um reajuste salarial altera o total de um pedido antigo em correção.
+        const colaboradorSalario = pedido.salario_base ?? pedido.colaborador?.salario ?? 0
 
-        const valorHoraNormal = colaboradorSalario / 220
-        const valorHorasExtras50 = valoresAtuais.horas_extras_50 * valorHoraNormal * 1.5
-        const valorHorasExtras100 = valoresAtuais.horas_extras_100 * valorHoraNormal * 2
-        const valorTotalHorasExtras = valorHorasExtras50 + valorHorasExtras100
-
-        const valorTotal =
-          colaboradorSalario +
-          valorTotalHorasExtras +
-          valoresAtuais.valor_km +
-          valoresAtuais.conducao +
-          valoresAtuais.valor_plantao +
-          valoresAtuais.comissao -
-          valoresAtuais.valor_desconto
+        // Mesmo módulo usado pelo servidor em corrigirPedido — condução e KM ficam
+        // fora do valor da nota (aparecem na tela mas não entram no total), igual
+        // ao que de fato é salvo.
+        const composicao = calcularComposicaoPedido({
+          salarioBase: colaboradorSalario,
+          horasExtras50: valoresAtuais.horas_extras_50,
+          horasExtras100: valoresAtuais.horas_extras_100,
+          valorPlantao: valoresAtuais.valor_plantao,
+          comissao: valoresAtuais.comissao,
+          valorDesconto: valoresAtuais.valor_desconto,
+        })
+        const valorTotalHorasExtras = composicao.valorHorasExtras
+        const valorTotal = composicao.valorTotal
 
         const dataCriacao = new Date(pedido.created_at)
         const dataFormatada = dataCriacao.toLocaleDateString("pt-BR")
@@ -221,7 +224,7 @@ export function CorrecaoList({ pedidos }: CorrecaoListProps) {
                 />
                 {isEditando && (
                   <p className="text-xs text-muted-foreground mt-1">
-                    Valor calculado: {formatCurrency(valorHorasExtras50)}
+                    Valor calculado: {formatCurrency(composicao.valorHorasExtras50)}
                   </p>
                 )}
               </div>
@@ -248,7 +251,7 @@ export function CorrecaoList({ pedidos }: CorrecaoListProps) {
                 />
                 {isEditando && (
                   <p className="text-xs text-muted-foreground mt-1">
-                    Valor calculado: {formatCurrency(valorHorasExtras100)}
+                    Valor calculado: {formatCurrency(composicao.valorHorasExtras100)}
                   </p>
                 )}
               </div>

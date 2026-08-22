@@ -8,3 +8,6 @@ node_modules
 .next/
 .env*.local
 .DS_Store
+
+# capturas do script de screenshot (QA local, não são artefato do produto)
+/screenshots/

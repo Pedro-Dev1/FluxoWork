@@ -35,6 +35,7 @@ interface Pedido {
   conducao: number
   valor_plantao: number
   valor_total: number
+  salario_base?: number
   status?: string
   created_at: string
   valor_desconto?: number
@@ -152,7 +153,7 @@ export function MeusPagamentosList({ pedidos, colaborador, isHistorico = false }
     : { mes: 1, ano: 2025 }
 
   const valorEsperado = pedidoSelecionado
-    ? (colaborador?.salario || 0) +
+    ? (pedidoSelecionado.salario_base ?? colaborador?.salario ?? 0) +
       pedidoSelecionado.horas_extras +
       (pedidoSelecionado.conducao || 0) +
       (pedidoSelecionado.valor_plantao || 0) -
@@ -190,7 +191,7 @@ export function MeusPagamentosList({ pedidos, colaborador, isHistorico = false }
         {pedidos.map((pedido) => {
           // Valor da NF = Salário + HE + Plantão - Desconto (sem condução e KM)
           const valorParaEmitir =
-            (colaborador?.salario || 0) +
+            (pedido.salario_base ?? colaborador?.salario ?? 0) +
             pedido.horas_extras +
             (pedido.valor_plantao || 0) -
             (pedido.valor_desconto || 0)
@@ -384,7 +385,7 @@ export function MeusPagamentosList({ pedidos, colaborador, isHistorico = false }
                           <DollarSign className="w-5 h-5 text-primary mt-0.5" />
                           <div>
                             <p className="text-sm text-muted-foreground">Salário Base</p>
-                            <p className="font-semibold">{formatValue(colaborador?.salario || 0)}</p>
+                            <p className="font-semibold">{formatValue(pedido.salario_base ?? colaborador?.salario ?? 0)}</p>
                           </div>
                         </div>
 

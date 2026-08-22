@@ -120,7 +120,7 @@ export function PedidosSemNotaList({ pedidos }: PedidosSemNotaListProps) {
         <p className="text-sm text-muted-foreground px-1">{pedidos.length} {pedidos.length === 1 ? "pedido" : "pedidos"} aguardando nota</p>
 
         {pedidos.map((pedido) => {
-          const salarioBase = pedido.colaborador?.salario || 0
+          const salarioBase = pedido.salario_base ?? pedido.colaborador?.salario ?? 0
           const valorNF = salarioBase + (pedido.horas_extras || 0) + (pedido.conducao || 0) + (pedido.valor_plantao || 0) - (pedido.valor_desconto || 0)
           const diasDesdeAprovacao = Math.floor((Date.now() - new Date(pedido.created_at).getTime()) / (1000 * 60 * 60 * 24))
           const temDeadline = pedido.data_limite_anexo_nota

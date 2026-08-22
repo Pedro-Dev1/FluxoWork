@@ -307,7 +307,7 @@ export async function deletarColaborador(id: string) {
 }
 
 export async function atualizarColaborador(id: string, data: Partial<NovoColaborador>) {
-  await checkPermission(["Adm", "Financeiro"])
+  const session = await checkPermission(["Adm", "Financeiro"])
 
   const supabase = await getSupabaseServerClient()
 
@@ -366,6 +366,35 @@ export async function atualizarColaborador(id: string, data: Partial<NovoColabor
   if (data.chave_pix !== undefined) updateData.chave_pix = data.chave_pix || null
   if (data.tipo_chave_pix !== undefined) updateData.tipo_chave_pix = data.tipo_chave_pix || null
   if (data.centro_custo_id !== undefined) updateData.centro_custo_id = data.centro_custo_id || null
+
+  if (data.salario !== undefined) {
+    // Registra em historico_reajustes mesmo quando o salário é alterado pela edição
+    // direta do cadastro (fora do fluxo "Aplicar Reajuste"). Sem isso, essa mudança
+    // não fica rastreável e pedidos antigos não podem ser reconstruídos com o
+    // salário correto de cada época — foi exatamente essa lacuna que corrompeu o
+    // salario_base de pedidos passados.
+    const { data: colaboradorAtual, error: colaboradorAtualError } = await supabase
+      .from("colaboradores")
+      .select("salario")
+      .eq("id", id)
+      .single()
+
+    if (!colaboradorAtualError && colaboradorAtual && colaboradorAtual.salario !== data.salario) {
+      const { error: historicoError } = await supabase.from("historico_reajustes").insert({
+        colaborador_id: id,
+        salario_anterior: colaboradorAtual.salario,
+        salario_novo: data.salario,
+        tipo_reajuste: "valor",
+        valor_reajuste: data.salario - colaboradorAtual.salario,
+        motivo: "Alteração direta no cadastro do colaborador",
+        aplicado_por: session.colaboradorId,
+      })
+
+      if (historicoError) {
+        console.error("[v0] Erro ao registrar histórico de alteração direta de salário:", historicoError)
+      }
+    }
+  }
 
   console.log("[v0] atualizarColaborador updateData:", JSON.stringify(updateData))
 

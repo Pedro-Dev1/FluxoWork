@@ -49,7 +49,7 @@ export function HistoricoList({ pedidos }: HistoricoListProps) {
     <div className="space-y-4">
       {pedidos.map((pedido) => {
         const colaboradorNome = pedido.colaborador?.nome_completo || "N/A"
-        const colaboradorSalario = pedido.colaborador?.salario || 0
+        const colaboradorSalario = pedido.salario_base ?? pedido.colaborador?.salario ?? 0
         const isReembolsoKm = pedido.tipo_pedido === "reembolso_km"
 
         return (

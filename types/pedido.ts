@@ -13,6 +13,7 @@ export interface PedidoPagamento {
   comissao?: number
   motivo_comissao?: string
   valor_total: number
+  salario_base?: number
   valor_desconto: number
   motivo_desconto?: string
   created_at: string

@@ -79,8 +79,15 @@ export function SystemControl() {
   if (isLoading) {
     return (
       <Card>
-        <CardContent className="flex items-center justify-center py-8">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <CardContent className="flex items-center justify-between py-4 px-6">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-full bg-muted animate-pulse" />
+            <div className="space-y-1.5">
+              <div className="h-3.5 w-32 rounded bg-muted animate-pulse" />
+              <div className="h-3 w-48 rounded bg-muted animate-pulse" />
+            </div>
+          </div>
+          <div className="h-5 w-16 rounded bg-muted animate-pulse" />
         </CardContent>
       </Card>
     )
