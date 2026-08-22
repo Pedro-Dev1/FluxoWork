@@ -501,7 +501,17 @@ export async function listarPedidosPorSupervisor(supervisorId: string) {
         nome_completo,
         salario,
         tipo_acesso,
-        equipe_id
+        equipe_id,
+        centro_custo_id,
+        equipe:equipes!colaboradores_equipe_id_fkey (
+          id,
+          nome
+        ),
+        centro_custo:centros_custo!colaboradores_centro_custo_id_fkey (
+          id,
+          numero,
+          nome
+        )
       ),
       criado_por:colaboradores!criado_por_colaborador_id (
         nome_completo,
@@ -566,7 +576,17 @@ export async function listarPedidosPorGerente(gerenteId: string, filtros?: { dat
         nome_completo,
         salario,
         tipo_acesso,
-        equipe_id
+        equipe_id,
+        centro_custo_id,
+        equipe:equipes!colaboradores_equipe_id_fkey (
+          id,
+          nome
+        ),
+        centro_custo:centros_custo!colaboradores_centro_custo_id_fkey (
+          id,
+          numero,
+          nome
+        )
       ),
       criado_por:colaboradores!criado_por_colaborador_id (
         nome_completo,
