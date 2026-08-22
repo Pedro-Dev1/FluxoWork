@@ -125,7 +125,7 @@ export function SystemControl() {
         <CardContent className="space-y-4">
           {!isActive && status?.suspended_reason && (
             <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/20">
-              <p className="text-sm font-medium text-red-400 mb-1">Motivo da Suspensao:</p>
+              <p className="text-sm font-medium text-red-400 mb-1">Motivo da Suspensão:</p>
               <p className="text-sm text-red-300">{status.suspended_reason}</p>
               {status.suspended_at && (
                 <p className="text-xs text-red-400/70 mt-2">
@@ -185,21 +185,21 @@ export function SystemControl() {
               Suspender Sistema
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Ao suspender o sistema, todos os usuarios (exceto administradores) verao uma mensagem de manutencao e nao poderao acessar as funcionalidades.
+              Ao suspender o sistema, todos os usuários (exceto administradores) verão uma mensagem de manutenção e não poderão acessar as funcionalidades.
             </AlertDialogDescription>
           </AlertDialogHeader>
           
           <div className="space-y-3 py-4">
-            <Label htmlFor="reason">Motivo da Suspensao *</Label>
+            <Label htmlFor="reason">Motivo da Suspensão *</Label>
             <Textarea
               id="reason"
-              placeholder="Ex: Manutencao programada, atualizacao do sistema..."
+              placeholder="Ex: Manutenção programada, atualização do sistema..."
               value={suspensionReason}
               onChange={(e) => setSuspensionReason(e.target.value)}
               className="min-h-[100px]"
             />
             <p className="text-xs text-muted-foreground">
-              Este motivo sera exibido para todos os usuarios.
+              Este motivo será exibido para todos os usuários.
             </p>
           </div>
 
@@ -218,7 +218,7 @@ export function SystemControl() {
               ) : (
                 <>
                   <PowerOff className="h-4 w-4 mr-2" />
-                  Confirmar Suspensao
+                  Confirmar Suspensão
                 </>
               )}
             </AlertDialogAction>
@@ -235,7 +235,7 @@ export function SystemControl() {
               Reativar Sistema
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Ao reativar o sistema, todos os usuarios poderao acessar novamente as funcionalidades normalmente.
+              Ao reativar o sistema, todos os usuários poderão acessar novamente as funcionalidades normalmente.
             </AlertDialogDescription>
           </AlertDialogHeader>
 
@@ -254,7 +254,7 @@ export function SystemControl() {
               ) : (
                 <>
                   <Power className="h-4 w-4 mr-2" />
-                  Confirmar Reativacao
+                  Confirmar Reativação
                 </>
               )}
             </AlertDialogAction>

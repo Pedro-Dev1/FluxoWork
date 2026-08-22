@@ -45,7 +45,7 @@ export function NotasPeriodoList({ pedidos }: NotasPeriodoListProps) {
         <div className="rounded-full bg-muted p-6 mb-4">
           <FileText className="w-12 h-12 text-muted-foreground" />
         </div>
-        <h3 className="text-xl font-semibold mb-2">Nenhuma nota neste periodo</h3>
+        <h3 className="text-xl font-semibold mb-2">Nenhuma nota neste período</h3>
         <p className="text-muted-foreground">
           Nao foram encontradas notas fiscais para este mes.
         </p>
@@ -205,14 +205,14 @@ export function NotasPeriodoList({ pedidos }: NotasPeriodoListProps) {
                           <span className="font-semibold">{formatValue(pedido.valor_plantao || 0)}</span>
                         </div>
                         <div>
-                          <span className="text-muted-foreground block">Comissao</span>
+                          <span className="text-muted-foreground block">Comissão</span>
                           <span className="font-semibold">{formatValue(pedido.comissao || 0)}</span>
                         </div>
                       </div>
 
                       <div className="grid grid-cols-2 gap-2 text-xs bg-teal-50 border border-teal-200 p-2 rounded">
                         <div>
-                          <span className="text-teal-700 block">Conducao (fora da NF)</span>
+                          <span className="text-teal-700 block">Condução (fora da NF)</span>
                           <span className="font-semibold text-teal-800">{formatValue(pedido.conducao || 0)}</span>
                         </div>
                         <div>

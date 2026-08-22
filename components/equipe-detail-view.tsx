@@ -227,7 +227,7 @@ export function EquipeDetailView({
                 <TableRow>
                   <TableHead>Nome</TableHead>
                   <TableHead className="hidden sm:table-cell">Email</TableHead>
-                  <TableHead>Funcao</TableHead>
+                  <TableHead>Função</TableHead>
                   <TableHead className="w-[60px]" />
                 </TableRow>
               </TableHeader>

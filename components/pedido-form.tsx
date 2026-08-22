@@ -632,7 +632,7 @@ export function PedidoForm({ colaboradores, tipoAcesso }: PedidoFormProps) {
               )}
               {resumo.conducao > 0 && (
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground flex items-center gap-1.5"><Bus className="h-3.5 w-3.5" />Conducao</span>
+                  <span className="text-muted-foreground flex items-center gap-1.5"><Bus className="h-3.5 w-3.5" />Condução</span>
                   <span className="font-medium text-teal-700">+ {fmt(resumo.conducao)}</span>
                 </div>
               )}
@@ -644,7 +644,7 @@ export function PedidoForm({ colaboradores, tipoAcesso }: PedidoFormProps) {
               )}
               {resumo.comissao > 0 && (
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground flex items-center gap-1.5"><Award className="h-3.5 w-3.5" />Comissao</span>
+                  <span className="text-muted-foreground flex items-center gap-1.5"><Award className="h-3.5 w-3.5" />Comissão</span>
                   <span className="font-medium text-blue-700">+ {fmt(resumo.comissao)}</span>
                 </div>
               )}

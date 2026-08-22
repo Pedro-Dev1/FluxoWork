@@ -103,12 +103,12 @@ export function AceitesTermosList() {
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total de Usuarios</CardTitle>
+            <CardTitle className="text-sm font-medium">Total de Usuários</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.totalUsers}</div>
-            <p className="text-xs text-muted-foreground">Usuarios ativos no sistema</p>
+            <p className="text-xs text-muted-foreground">Usuários ativos no sistema</p>
           </CardContent>
         </Card>
 
@@ -130,7 +130,7 @@ export function AceitesTermosList() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-amber-600">{stats.pendingAcceptance}</div>
-            <p className="text-xs text-muted-foreground">Ainda nao aceitaram</p>
+            <p className="text-xs text-muted-foreground">Ainda não aceitaram</p>
           </CardContent>
         </Card>
 
@@ -149,7 +149,7 @@ export function AceitesTermosList() {
       {/* Filters */}
       <Card>
         <CardHeader>
-          <CardTitle>Historico de Aceites</CardTitle>
+          <CardTitle>Histórico de Aceites</CardTitle>
           <CardDescription>
             Lista detalhada de todos os aceites e recusas registrados
           </CardDescription>
@@ -193,7 +193,7 @@ export function AceitesTermosList() {
                   <TableRow>
                     <TableHead>Colaborador</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Versao</TableHead>
+                    <TableHead>Versão</TableHead>
                     <TableHead>Data</TableHead>
                     <TableHead>Dispositivo</TableHead>
                     <TableHead>IP</TableHead>

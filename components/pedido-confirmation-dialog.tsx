@@ -123,7 +123,7 @@ export function PedidoConfirmationDialog({
                 <div className="flex items-center justify-between p-3 bg-teal-50 border border-teal-200 rounded-lg">
                   <div className="flex items-center gap-2">
                     <Bus className="h-5 w-5 text-teal-500" />
-                    <span className="font-medium text-teal-900">Conducao</span>
+                    <span className="font-medium text-teal-900">Condução</span>
                   </div>
                   <span className="text-lg font-bold text-teal-700">{fmt(pedido.conducao)}</span>
                 </div>
@@ -149,7 +149,7 @@ export function PedidoConfirmationDialog({
                   <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-2">
                       <Award className="h-5 w-5 text-blue-500" />
-                      <span className="font-medium text-blue-900">Comissao</span>
+                      <span className="font-medium text-blue-900">Comissão</span>
                     </div>
                     <span className="text-lg font-bold text-blue-700">{fmt(pedido.comissao || 0)}</span>
                   </div>

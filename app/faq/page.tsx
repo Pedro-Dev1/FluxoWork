@@ -8,81 +8,81 @@ import { Input } from "@/components/ui/input"
 const faqCategories = [
   {
     id: "acesso",
-    title: "Acesso e Autenticacao",
+    title: "Acesso e Autenticação",
     icon: Key,
     questions: [
       {
         question: "Como recebo meu acesso ao FluxoPay?",
-        answer: "O acesso e provisionado pelo administrador da empresa contratante. Apos o cadastro, voce recebe um e-mail com credenciais temporarias e deve alterar a senha no primeiro login. Caso nao receba, verifique o spam ou contate simpleqia.oficial@gmail.com."
+        answer: "O acesso é provisionado pelo administrador da empresa contratante. Após o cadastro, você recebe um e-mail com credenciais temporárias e deve alterar a senha no primeiro login. Caso não receba, verifique o spam ou contate simpleqia.oficial@gmail.com."
       },
       {
         question: "Como recupero minha senha?",
-        answer: "Clique em 'Esqueci minha senha' na tela de login e informe seu e-mail cadastrado. Voce recebera um link de redefinicao valido por 30 minutos. Se nao chegar, contate simpleqia.oficial@gmail.com ou (11) 91486-0806 via WhatsApp com seu nome e empresa."
+        answer: "Clique em 'Esqueci minha senha' na tela de login e informe seu e-mail cadastrado. Você receberá um link de redefinição válido por 30 minutos. Se não chegar, contate simpleqia.oficial@gmail.com ou (11) 91486-0806 via WhatsApp com seu nome e empresa."
       },
       {
         question: "Por que minha conta foi bloqueada?",
-        answer: "Por seguranca, a conta e bloqueada apos 5 tentativas incorretas consecutivas. O desbloqueio automatico ocorre apos 15 minutos. Para desbloqueio imediato, contate o suporte informando seu e-mail e empresa."
+        answer: "Por segurança, a conta é bloqueada após 5 tentativas incorretas consecutivas. O desbloqueio automático ocorre após 15 minutos. Para desbloqueio imediato, contate o suporte informando seu e-mail e empresa."
       },
       {
         question: "Posso usar o FluxoPay no celular?",
-        answer: "Sim. O FluxoPay e responsivo e funciona em qualquer navegador moderno (Chrome, Firefox, Safari). Recomendamos ativar a trava de tela no dispositivo e evitar redes Wi-Fi publicas sem VPN."
+        answer: "Sim. O FluxoPay é responsivo e funciona em qualquer navegador moderno (Chrome, Firefox, Safari). Recomendamos ativar a trava de tela no dispositivo e evitar redes Wi-Fi públicas sem VPN."
       }
     ]
   },
   {
     id: "gestao",
-    title: "Gestao de Prestadores e Pagamentos",
+    title: "Gestão de Prestadores e Pagamentos",
     icon: CreditCard,
     questions: [
       {
         question: "O que o FluxoPay gerencia exatamente?",
-        answer: "O FluxoPay e uma plataforma SaaS de gestao de prestadores de servico com foco em controle de fluxo de validacao, registro de contratos, status de aprovacao e controle de pagamentos. Ciclo completo: cadastro, validacao documental, aprovacao multinivel, ordem de pagamento, quitacao e arquivamento."
+        answer: "O FluxoPay é uma plataforma SaaS de gestão de prestadores de serviço com foco em controle de fluxo de validação, registro de contratos, status de aprovação e controle de pagamentos. Ciclo completo: cadastro, validação documental, aprovação multinível, ordem de pagamento, quitação e arquivamento."
       },
       {
-        question: "Como funciona o fluxo de aprovacao?",
-        answer: "O fluxo e configurado pelo administrador da empresa: (1) Cadastro do prestador com dados e documentos; (2) Triagem e validacao documental; (3) Aprovacao gerencial conforme hierarquia; (4) Liberacao da ordem de pagamento. Cada etapa registra responsavel, data e justificativa."
+        question: "Como funciona o fluxo de aprovação?",
+        answer: "O fluxo é configurado pelo administrador da empresa: (1) Cadastro do prestador com dados e documentos; (2) Triagem e validação documental; (3) Aprovação gerencial conforme hierarquia; (4) Liberação da ordem de pagamento. Cada etapa registra responsável, data e justificativa."
       },
       {
         question: "Os dados de pagamento ficam armazenados no FluxoPay?",
-        answer: "O FluxoPay registra os dados necessarios para controle e auditoria (valores, datas, responsaveis, comprovantes). Dados bancarios sensiveis sao trafegados via canais criptografados com acesso restrito. A empresa nao acessa dados financeiros fora do escopo operacional contratado."
+        answer: "O FluxoPay registra os dados necessários para controle e auditoria (valores, datas, responsáveis, comprovantes). Dados bancários sensíveis são trafegados via canais criptografados com acesso restrito. A empresa não acessa dados financeiros fora do escopo operacional contratado."
       },
       {
-        question: "Como exportar relatorios de pagamento?",
-        answer: "Acesse 'Relatorios' no menu principal, selecione filtros (periodo, prestador, status) e clique em 'Exportar'. Formatos disponiveis: PDF e CSV. Os relatorios incluem trilha de auditoria completa com todas as etapas do fluxo."
+        question: "Como exportar relatórios de pagamento?",
+        answer: "Acesse 'Relatórios' no menu principal, selecione filtros (período, prestador, status) e clique em 'Exportar'. Formatos disponíveis: PDF e CSV. Os relatórios incluem trilha de auditoria completa com todas as etapas do fluxo."
       }
     ]
   },
   {
     id: "seguranca",
-    title: "Seguranca e Privacidade",
+    title: "Segurança e Privacidade",
     icon: Shield,
     questions: [
       {
-        question: "Como meus dados sao protegidos?",
-        answer: "Toda comunicacao usa TLS 1.3. Senhas armazenadas com hash bcrypt (fator >= 12). Dados em repouso com AES-256. Logs imutaveis de todas as acoes. MFA obrigatorio para administradores. Revisoes de seguranca periodicas realizadas."
+        question: "Como meus dados são protegidos?",
+        answer: "Toda comunicação usa TLS 1.3. Senhas armazenadas com hash bcrypt (fator >= 12). Dados em repouso com AES-256. Logs imutáveis de todas as ações. MFA obrigatório para administradores. Revisões de segurança periódicas realizadas."
       },
       {
-        question: "Como reportar uma suspeita de incidente de seguranca?",
-        answer: "Notifique imediatamente via simpleqia.oficial@gmail.com ou WhatsApp (11) 91486-0806. Descreva o ocorrido, horario e funcionalidade envolvida. Nunca compartilhe sua senha com ninguem, nem com o suporte. SLA de resposta de 4 horas para incidentes criticos."
+        question: "Como reportar uma suspeita de incidente de segurança?",
+        answer: "Notifique imediatamente via simpleqia.oficial@gmail.com ou WhatsApp (11) 91486-0806. Descreva o ocorrido, horário e funcionalidade envolvida. Nunca compartilhe sua senha com ninguém, nem com o suporte. SLA de resposta de 4 horas para incidentes críticos."
       },
       {
-        question: "O sistema registra minhas acoes?",
-        answer: "Sim. Por razoes de seguranca e auditoria, o FluxoPay registra logs de acesso, acoes realizadas, alteracoes de dados e tentativas de login. Esses registros sao acessiveis apenas pelo time de TI e gestores autorizados, conforme a Politica de Privacidade."
+        question: "O sistema registra minhas ações?",
+        answer: "Sim. Por razões de segurança e auditoria, o FluxoPay registra logs de acesso, ações realizadas, alterações de dados e tentativas de login. Esses registros são acessíveis apenas pelo time de TI e gestores autorizados, conforme a Política de Privacidade."
       }
     ]
   },
   {
     id: "suporte",
-    title: "Suporte Tecnico",
+    title: "Suporte Técnico",
     icon: HelpCircle,
     questions: [
       {
-        question: "Quais sao os canais de suporte?",
-        answer: "E-mail: simpleqia.oficial@gmail.com (resposta em ate 24h uteis). WhatsApp: (11) 91486-0806 (seg-sex 8h-18h). Para incidentes criticos de producao: SLA de 4 horas corridas, 7 dias por semana. Sempre informe empresa, e-mail de acesso e descricao detalhada do problema."
+        question: "Quais são os canais de suporte?",
+        answer: "E-mail: simpleqia.oficial@gmail.com (resposta em até 24h úteis). WhatsApp: (11) 91486-0806 (seg-sex 8h-18h). Para incidentes críticos de produção: SLA de 4 horas corridas, 7 dias por semana. Sempre informe empresa, e-mail de acesso e descrição detalhada do problema."
       },
       {
-        question: "Como solicitar criacao ou remocao de usuarios?",
-        answer: "O administrador da empresa pode gerenciar usuarios no painel de configuracoes. Para operacoes em lote, contate simpleqia.oficial@gmail.com com nome completo, e-mail e nivel de acesso desejado. Prazo de ate 1 dia util."
+        question: "Como solicitar criação ou remoção de usuários?",
+        answer: "O administrador da empresa pode gerenciar usuários no painel de configurações. Para operações em lote, contate simpleqia.oficial@gmail.com com nome completo, e-mail e nível de acesso desejado. Prazo de até 1 dia útil."
       }
     ]
   }
@@ -94,20 +94,20 @@ export default function FAQPage() {
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
 
   const toggleQuestion = (id: string) => {
-    setExpandedQuestions(prev => 
+    setExpandedQuestions(prev =>
       prev.includes(id) ? prev.filter(q => q !== id) : [...prev, id]
     )
   }
 
   const filteredCategories = faqCategories.map(category => ({
     ...category,
-    questions: category.questions.filter(q => 
+    questions: category.questions.filter(q =>
       q.question.toLowerCase().includes(searchTerm.toLowerCase()) ||
       q.answer.toLowerCase().includes(searchTerm.toLowerCase())
     )
   })).filter(category => category.questions.length > 0)
 
-  const displayCategories = activeCategory 
+  const displayCategories = activeCategory
     ? filteredCategories.filter(c => c.id === activeCategory)
     : filteredCategories
 
@@ -133,8 +133,8 @@ export default function FAQPage() {
       <div className="bg-gradient-to-b from-primary/10 to-transparent py-16 px-4">
         <div className="max-w-3xl mx-auto text-center">
           <h1 className="text-4xl font-bold text-white mb-4">Central de Ajuda</h1>
-          <p className="text-gray-400 mb-8">Encontre respostas para suas duvidas sobre o FluxoPay</p>
-          
+          <p className="text-gray-400 mb-8">Encontre respostas para suas dúvidas sobre o FluxoPay</p>
+
           {/* Search */}
           <div className="relative max-w-xl mx-auto">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500" />
@@ -155,8 +155,8 @@ export default function FAQPage() {
           <button
             onClick={() => setActiveCategory(null)}
             className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-              activeCategory === null 
-                ? 'bg-primary text-white' 
+              activeCategory === null
+                ? 'bg-primary text-white'
                 : 'bg-[#111827] text-gray-400 hover:text-white border border-gray-700'
             }`}
           >
@@ -167,8 +167,8 @@ export default function FAQPage() {
               key={category.id}
               onClick={() => setActiveCategory(category.id)}
               className={`px-4 py-2 rounded-full text-sm font-medium transition-colors flex items-center gap-2 ${
-                activeCategory === category.id 
-                  ? 'bg-primary text-white' 
+                activeCategory === category.id
+                  ? 'bg-primary text-white'
                   : 'bg-[#111827] text-gray-400 hover:text-white border border-gray-700'
               }`}
             >
@@ -189,14 +189,14 @@ export default function FAQPage() {
               </div>
               <h2 className="text-xl font-semibold text-white">{category.title}</h2>
             </div>
-            
+
             <div className="space-y-3">
               {category.questions.map((item, idx) => {
                 const questionId = `${category.id}-${idx}`
                 const isExpanded = expandedQuestions.includes(questionId)
-                
+
                 return (
-                  <div 
+                  <div
                     key={questionId}
                     className="bg-[#111827] border border-gray-800 rounded-xl overflow-hidden"
                   >
@@ -229,17 +229,17 @@ export default function FAQPage() {
         {/* Contact Box */}
         <div className="mt-12 bg-[#111827] border border-gray-800 rounded-2xl p-8 text-center">
           <h3 className="text-xl font-semibold text-white mb-2">Ainda precisa de ajuda?</h3>
-          <p className="text-gray-400 mb-6">Nossa equipe esta pronta para ajudar voce</p>
-          
+          <p className="text-gray-400 mb-6">Nossa equipe está pronta para ajudar você</p>
+
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <a 
+            <a
               href="mailto:simpleqia.oficial@gmail.com"
               className="flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition-colors"
             >
               <Mail className="h-5 w-5" />
               simpleqia.oficial@gmail.com
             </a>
-            <a 
+            <a
               href="https://wa.me/5511914860806"
               target="_blank"
               rel="noopener noreferrer"

@@ -140,7 +140,7 @@ export function CentrosCustoList({ centros }: CentrosCustoListProps) {
                 <TableRow>
                   <TableHead className="w-[120px]">Numero</TableHead>
                   <TableHead>Nome da Area</TableHead>
-                  <TableHead className="w-[100px] text-right">Acoes</TableHead>
+                  <TableHead className="w-[100px] text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

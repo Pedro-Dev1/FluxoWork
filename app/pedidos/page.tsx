@@ -17,7 +17,7 @@ export default async function PedidosPage() {
         </div>
         <Alert>
           <LogIn className="h-4 w-4" />
-          <AlertTitle>Login Necessario</AlertTitle>
+          <AlertTitle>Login Necessário</AlertTitle>
           <AlertDescription className="mt-2">
             Voce precisa fazer login como <strong>Supervisor ou Gerente</strong> para criar pedidos de pagamento.
           </AlertDescription>

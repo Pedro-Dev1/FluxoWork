@@ -163,7 +163,7 @@ export function EquipesList({ equipes, membrosCount = {} }: EquipesListProps) {
                   <TableHead className="hidden sm:table-cell">Supervisor</TableHead>
                   <TableHead className="hidden md:table-cell">Gerentes</TableHead>
                   <TableHead className="hidden sm:table-cell w-[100px] text-center">Membros</TableHead>
-                  <TableHead className="w-[80px] text-right">Acoes</TableHead>
+                  <TableHead className="w-[80px] text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

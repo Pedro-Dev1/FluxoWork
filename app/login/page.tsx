@@ -71,7 +71,7 @@ export default function LoginPage() {
               <span className="text-primary">Pay</span>
             </h1>
             <p className="text-gray-400 mt-2 text-sm">
-              Plataforma de Gestao de Prestadores - Simpleqia
+              Plataforma de Gestão de Prestadores - Simpleqia
             </p>
           </div>
 
@@ -79,7 +79,7 @@ export default function LoginPage() {
           <div className="bg-[#111827] border border-gray-800 rounded-2xl p-6 shadow-2xl">
             <div className="mb-6">
               <h2 className="text-xl font-semibold text-white">Acesse sua conta</h2>
-              <p className="text-gray-400 text-sm mt-1">Area restrita a usuarios autorizados</p>
+              <p className="text-gray-400 text-sm mt-1">Área restrita a usuários autorizados</p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-5">
@@ -143,7 +143,7 @@ export default function LoginPage() {
             Ao acessar, voce concorda com nossos{" "}
             <Link href="/termos" className="text-primary hover:underline">Termos de Uso</Link>
             {" "}e{" "}
-            <Link href="/privacidade" className="text-primary hover:underline">Politica de Privacidade</Link>
+            <Link href="/privacidade" className="text-primary hover:underline">Política de Privacidade</Link>
           </p>
         </div>
       </main>
