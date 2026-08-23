@@ -125,19 +125,18 @@ export default function LoginPage() {
                     {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                   </button>
                 </div>
-                <div className="flex justify-end">
-                  <Link href="/esqueci-senha" className="text-xs text-gray-400 hover:text-primary transition-colors">
-                    Esqueci minha senha
-                  </Link>
-                </div>
               </div>
 
               <Button
-                type="submit" 
-                disabled={loading} 
+                type="submit"
+                disabled={loading}
                 className="w-full h-12 text-sm font-semibold bg-primary hover:bg-primary/90"
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Entrar"}
+              </Button>
+
+              <Button type="button" variant="outline" asChild className="w-full h-11 text-sm font-medium bg-transparent border-gray-700 text-gray-300 hover:bg-[#1a2332] hover:text-white">
+                <Link href="/esqueci-senha">Esqueci minha senha</Link>
               </Button>
             </form>
 
