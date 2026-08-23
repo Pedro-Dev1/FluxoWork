@@ -39,7 +39,14 @@ export default async function RootLayout({
   const headersList = await headers()
   const pathname = headersList.get("x-pathname") || ""
 
-  const isAuthPage = pathname === "/login" || pathname === "/setup" || pathname === "/faq" || pathname === "/termos" || pathname === "/privacidade"
+  const isAuthPage =
+    pathname === "/login" ||
+    pathname === "/setup" ||
+    pathname === "/faq" ||
+    pathname === "/termos" ||
+    pathname === "/privacidade" ||
+    pathname === "/esqueci-senha" ||
+    pathname.startsWith("/redefinir-senha/")
 
   return (
     <html lang="pt-BR" className={`${geistSans.variable} ${geistMono.variable}`}>

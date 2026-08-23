@@ -1,0 +1,111 @@
+import { Resend } from "resend"
+
+const resend = new Resend(process.env.RESEND_API_KEY)
+
+const FROM = process.env.RESEND_FROM_EMAIL || "FluxoPay <notificacoes@simpleqia.com>"
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://fluxopay.connectvending.simpleqia.com"
+
+function emailShell(opts: { preheader: string; heading: string; bodyHtml: string; ctaLabel: string; ctaUrl: string }) {
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>${opts.heading}</title>
+</head>
+<body style="margin:0; padding:0; background-color:#F6F8FA; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <div style="display:none; max-height:0; overflow:hidden; opacity:0;">${opts.preheader}</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#F6F8FA; padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="max-width:480px; width:100%; background-color:#FFFFFF; border-radius:12px; overflow:hidden; border:1px solid #E3E8EE;">
+          <tr>
+            <td style="padding:28px 32px 20px 32px; border-bottom:1px solid #E3E8EE;">
+              <span style="font-size:20px; font-weight:700; color:#0066E5; letter-spacing:-0.02em;">FluxoPay</span>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px;">
+              <h1 style="margin:0 0 16px 0; font-size:20px; line-height:28px; font-weight:600; color:#1A1F36;">${opts.heading}</h1>
+              <div style="font-size:14px; line-height:22px; color:#545C6B;">${opts.bodyHtml}</div>
+              <table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:28px;">
+                <tr>
+                  <td style="border-radius:6px; background-color:#0066E5;">
+                    <a href="${opts.ctaUrl}" target="_blank" style="display:inline-block; padding:12px 24px; font-size:14px; font-weight:600; color:#FFFFFF; text-decoration:none; border-radius:6px;">${opts.ctaLabel}</a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:20px 0 0 0; font-size:12px; line-height:18px; color:#8792A2;">Se o botão não funcionar, copie e cole este link no navegador:<br />
+                <a href="${opts.ctaUrl}" style="color:#0066E5; word-break:break-all;">${opts.ctaUrl}</a>
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 32px; background-color:#F6F8FA; border-top:1px solid #E3E8EE;">
+              <p style="margin:0; font-size:12px; line-height:18px; color:#8792A2;">FluxoPay · Sistema de gestão de pagamentos<br />Este é um e-mail automático, não é necessário responder.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
+}
+
+export async function enviarEmailNotaFiscalPendente(params: {
+  destinatario: string
+  nomeColaborador: string
+  valorTotal: number
+  prazoDias: number
+}) {
+  const valorFormatado = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(params.valorTotal)
+  const heading = "Seu pedido foi aprovado — falta anexar a nota fiscal"
+  const bodyHtml = `
+    <p style="margin:0 0 12px 0;">Olá, ${params.nomeColaborador}.</p>
+    <p style="margin:0 0 12px 0;">Seu pedido de pagamento no valor de <strong style="color:#1A1F36;">${valorFormatado}</strong> foi aprovado pelo financeiro. Para que o pagamento seja processado, você precisa anexar a nota fiscal em até ${params.prazoDias} dias.</p>
+    <p style="margin:0;">Acesse o sistema e anexe sua nota fiscal o quanto antes.</p>
+  `
+  try {
+    await resend.emails.send({
+      from: FROM,
+      to: params.destinatario,
+      subject: "Pedido aprovado — anexe sua nota fiscal",
+      html: emailShell({
+        preheader: `Seu pedido de ${valorFormatado} foi aprovado. Anexe a nota fiscal para receber o pagamento.`,
+        heading,
+        bodyHtml,
+        ctaLabel: "Acessar e anexar nota",
+        ctaUrl: `${APP_URL}/login`,
+      }),
+    })
+  } catch (error) {
+    console.error("[v0] Erro ao enviar e-mail de nota fiscal pendente:", error)
+  }
+}
+
+export async function enviarEmailRedefinicaoSenha(params: { destinatario: string; nomeColaborador: string; token: string }) {
+  const resetUrl = `${APP_URL}/redefinir-senha/${params.token}`
+  const heading = "Redefinição de senha"
+  const bodyHtml = `
+    <p style="margin:0 0 12px 0;">Olá, ${params.nomeColaborador}.</p>
+    <p style="margin:0 0 12px 0;">Recebemos uma solicitação para redefinir a senha da sua conta no FluxoPay. Clique no botão abaixo para criar uma nova senha.</p>
+    <p style="margin:0;">Se você não solicitou essa alteração, pode ignorar este e-mail — sua senha atual continua válida. Este link expira em 1 hora.</p>
+  `
+  try {
+    await resend.emails.send({
+      from: FROM,
+      to: params.destinatario,
+      subject: "Redefinição de senha — FluxoPay",
+      html: emailShell({
+        preheader: "Clique para criar uma nova senha da sua conta FluxoPay.",
+        heading,
+        bodyHtml,
+        ctaLabel: "Redefinir minha senha",
+        ctaUrl: resetUrl,
+      }),
+    })
+  } catch (error) {
+    console.error("[v0] Erro ao enviar e-mail de redefinição de senha:", error)
+  }
+}

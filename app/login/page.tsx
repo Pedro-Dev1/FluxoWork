@@ -125,9 +125,14 @@ export default function LoginPage() {
                     {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                   </button>
                 </div>
+                <div className="flex justify-end">
+                  <Link href="/esqueci-senha" className="text-xs text-gray-400 hover:text-primary transition-colors">
+                    Esqueci minha senha
+                  </Link>
+                </div>
               </div>
 
-              <Button 
+              <Button
                 type="submit" 
                 disabled={loading} 
                 className="w-full h-12 text-sm font-semibold bg-primary hover:bg-primary/90"

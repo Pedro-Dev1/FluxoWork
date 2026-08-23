@@ -5,6 +5,16 @@ import { createSession, destroySession, getSession } from "@/lib/session"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import bcrypt from "bcryptjs"
+import crypto from "crypto"
+import { enviarEmailRedefinicaoSenha } from "@/lib/email"
+
+function validarForcaSenha(senha: string): string | null {
+  if (senha.length < 8) return "A nova senha deve ter no mínimo 8 caracteres"
+  if (!/[A-Z]/.test(senha) || !/[a-z]/.test(senha) || !/[0-9]/.test(senha)) {
+    return "A senha deve conter letras maiúsculas, minúsculas e números"
+  }
+  return null
+}
 
 const loginAttempts = new Map<string, { count: number; lastAttempt: number }>()
 
@@ -198,4 +208,138 @@ export async function redefinirSenha(senhaAtual: string, novaSenha: string) {
     success: true,
     message: "Senha atualizada com sucesso!",
   }
+}
+
+const resetRequestAttempts = new Map<string, { count: number; lastAttempt: number }>()
+
+function checkResetRateLimit(email: string): boolean {
+  const now = Date.now()
+  const attempt = resetRequestAttempts.get(email)
+
+  if (attempt) {
+    if (now - attempt.lastAttempt > 15 * 60 * 1000) {
+      resetRequestAttempts.delete(email)
+      return true
+    }
+    if (attempt.count >= 3) {
+      return false
+    }
+    attempt.count++
+    attempt.lastAttempt = now
+  } else {
+    resetRequestAttempts.set(email, { count: 1, lastAttempt: now })
+  }
+
+  return true
+}
+
+const MENSAGEM_GENERICA = "Se esse e-mail estiver cadastrado, enviaremos um link para redefinir a senha."
+
+export async function solicitarRedefinicaoSenha(email: string) {
+  const sanitizedEmail = email.trim().toLowerCase()
+
+  if (!sanitizedEmail) {
+    return { success: false, error: "Informe um e-mail" }
+  }
+
+  if (!checkResetRateLimit(sanitizedEmail)) {
+    return { success: false, error: "Muitas solicitações. Tente novamente em 15 minutos." }
+  }
+
+  const supabaseAdmin = await createAdminClient()
+
+  const { data: colaborador } = await supabaseAdmin
+    .from("colaboradores")
+    .select("id, nome_completo, email, ativo")
+    .eq("email", sanitizedEmail)
+    .maybeSingle()
+
+  // Não revela se o e-mail existe ou não — mesma resposta em ambos os casos.
+  if (!colaborador || colaborador.ativo === false) {
+    return { success: true, message: MENSAGEM_GENERICA }
+  }
+
+  const token = crypto.randomBytes(32).toString("hex")
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString()
+
+  const { error } = await supabaseAdmin
+    .from("colaboradores")
+    .update({ reset_token: token, reset_token_expires_at: expiresAt })
+    .eq("id", colaborador.id)
+
+  if (error) {
+    console.error("[v0] Erro ao gerar token de redefinição:", error)
+    return { success: true, message: MENSAGEM_GENERICA }
+  }
+
+  await enviarEmailRedefinicaoSenha({
+    destinatario: colaborador.email,
+    nomeColaborador: colaborador.nome_completo,
+    token,
+  })
+
+  return { success: true, message: MENSAGEM_GENERICA }
+}
+
+export async function verificarTokenRedefinicao(token: string) {
+  if (!token) return { valido: false }
+
+  const supabaseAdmin = await createAdminClient()
+
+  const { data: colaborador } = await supabaseAdmin
+    .from("colaboradores")
+    .select("id, reset_token_expires_at")
+    .eq("reset_token", token)
+    .maybeSingle()
+
+  if (!colaborador || !colaborador.reset_token_expires_at) {
+    return { valido: false }
+  }
+
+  if (new Date(colaborador.reset_token_expires_at).getTime() < Date.now()) {
+    return { valido: false }
+  }
+
+  return { valido: true }
+}
+
+export async function redefinirSenhaComToken(token: string, novaSenha: string) {
+  if (!token) {
+    return { success: false, error: "Link inválido" }
+  }
+
+  const erroForca = validarForcaSenha(novaSenha)
+  if (erroForca) {
+    return { success: false, error: erroForca }
+  }
+
+  const supabaseAdmin = await createAdminClient()
+
+  const { data: colaborador } = await supabaseAdmin
+    .from("colaboradores")
+    .select("id, reset_token_expires_at")
+    .eq("reset_token", token)
+    .maybeSingle()
+
+  if (!colaborador || !colaborador.reset_token_expires_at) {
+    return { success: false, error: "Link inválido ou expirado" }
+  }
+
+  if (new Date(colaborador.reset_token_expires_at).getTime() < Date.now()) {
+    return { success: false, error: "Link inválido ou expirado" }
+  }
+
+  const hashedPassword = await bcrypt.hash(novaSenha, 10)
+
+  const { error } = await supabaseAdmin
+    .from("colaboradores")
+    .update({ senha_hash: hashedPassword, reset_token: null, reset_token_expires_at: null })
+    .eq("id", colaborador.id)
+
+  if (error) {
+    console.error("[v0] Erro ao redefinir senha:", error)
+    return { success: false, error: "Erro ao redefinir senha. Tente novamente." }
+  }
+
+  return { success: true, message: "Senha redefinida com sucesso!" }
 }

@@ -12,7 +12,7 @@ export async function middleware(request: NextRequest) {
   const sessionCookie = request.cookies.get("fluxopay_session")
   const session = sessionCookie ? JSON.parse(sessionCookie.value) : null
 
-  const publicRoutes = ["/login", "/setup", "/faq", "/termos", "/privacidade"]
+  const publicRoutes = ["/login", "/setup", "/faq", "/termos", "/privacidade", "/esqueci-senha", "/redefinir-senha"]
   const isPublicRoute = publicRoutes.some((route) => request.nextUrl.pathname.startsWith(route))
 
   // Se não estiver logado e tentar acessar rota protegida, redirecionar para login

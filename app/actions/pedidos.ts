@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache"
 import { getSession } from "@/lib/session"
 import { put } from "@vercel/blob"
 import { calcularComposicaoPedido, calcularComposicaoReembolsoKm } from "@/lib/domain/calculo-financeiro"
+import { enviarEmailNotaFiscalPendente } from "@/lib/email"
 
 export async function criarPedido(data: NovoPedido) {
   const supabase = await getSupabaseServerClient()
@@ -209,11 +210,30 @@ export async function acaoFinanceiro(data: AcaoPedido) {
     updates.correcao_solicitada_por = "financeiro"
   }
 
-  const { error } = await supabase.from("pedidos_pagamento").update(updates).eq("id", data.pedido_id)
+  const { data: pedidoAtualizado, error } = await supabase
+    .from("pedidos_pagamento")
+    .update(updates)
+    .eq("id", data.pedido_id)
+    .select("valor_total, colaborador:colaboradores!colaborador_id(nome_completo, email)")
+    .single()
 
   if (error) {
     console.error("[v0] Erro ao atualizar pedido:", error)
     throw new Error("Erro ao processar ação")
+  }
+
+  if (data.acao === "aprovar") {
+    const colaboradorInfo = Array.isArray(pedidoAtualizado?.colaborador)
+      ? pedidoAtualizado.colaborador[0]
+      : pedidoAtualizado?.colaborador
+    if (colaboradorInfo?.email) {
+      await enviarEmailNotaFiscalPendente({
+        destinatario: colaboradorInfo.email,
+        nomeColaborador: colaboradorInfo.nome_completo,
+        valorTotal: pedidoAtualizado.valor_total,
+        prazoDias: 2,
+      })
+    }
   }
 
   revalidatePath("/aprovacoes")
