@@ -179,7 +179,7 @@ export async function listarColaboradores() {
   }
 
   const { data, error } = await scopeToTenant(
-    supabase.from("colaboradores").select("*, equipe:equipes!equipe_id(nome)"),
+    supabase.from("colaboradores").select("*, equipe:equipes!equipe_id(nome)").eq("is_super_admin", false),
     ctx,
   ).order("created_at", { ascending: false })
 
@@ -196,7 +196,7 @@ export async function getColaboradores() {
   const supabase = await getSupabaseServerClient()
 
   const { data, error } = await scopeToTenant(
-    supabase.from("colaboradores").select("id, nome_completo, email"),
+    supabase.from("colaboradores").select("id, nome_completo, email").eq("is_super_admin", false),
     ctx,
   ).order("nome_completo", { ascending: true })
 
@@ -505,7 +505,7 @@ export async function listarColaboradoresComGerente() {
   }
 
   const { data, error } = await scopeToTenant(
-    supabase.from("colaboradores").select("*, equipe:equipes!equipe_id(nome)"),
+    supabase.from("colaboradores").select("*, equipe:equipes!equipe_id(nome)").eq("is_super_admin", false),
     ctx,
   ).order("created_at", { ascending: false })
 
@@ -522,7 +522,7 @@ export async function exportarColaboradoresExcel() {
   const supabase = await getSupabaseServerClient()
 
   const { data, error } = await scopeToTenant(
-    supabase.from("colaboradores").select("*, equipe:equipes!equipe_id(nome)"),
+    supabase.from("colaboradores").select("*, equipe:equipes!equipe_id(nome)").eq("is_super_admin", false),
     ctx,
   ).order("nome_completo", { ascending: true })
 
