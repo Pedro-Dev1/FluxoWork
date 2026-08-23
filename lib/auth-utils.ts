@@ -27,3 +27,57 @@ export function podeAcessarRota(tipoAcesso: string, rota: string): boolean {
 
   return permissoes[tipoAcesso]?.includes(rota) || false
 }
+
+export interface AuthContext {
+  colaboradorId: string
+  tipoAcesso: string
+  tenantId: string | null
+  isSuperAdmin: boolean
+}
+
+// Helper compartilhado para as actions em app/actions/*.ts validarem sessão e
+// papel de forma consistente, em vez de cada arquivo reimplementar seu
+// próprio checkPermission() ad-hoc.
+export async function requireAuth(): Promise<AuthContext> {
+  const session = await getSession()
+
+  if (!session) {
+    throw new Error("Não autenticado")
+  }
+
+  return {
+    colaboradorId: session.colaboradorId,
+    tipoAcesso: session.tipoAcesso,
+    tenantId: session.tenantId,
+    isSuperAdmin: session.isSuperAdmin,
+  }
+}
+
+export async function requireRole(roles: string[]): Promise<AuthContext> {
+  const ctx = await requireAuth()
+
+  // Super Admin nunca pertence a uma carteira e enxerga o sistema inteiro —
+  // por isso ele passa em qualquer checagem de papel.
+  if (ctx.isSuperAdmin) return ctx
+
+  if (!roles.includes(ctx.tipoAcesso)) {
+    throw new Error("Sem permissão para esta ação")
+  }
+
+  return ctx
+}
+
+// Aplica o filtro de carteira em uma query do Supabase. Super Admin não tem
+// tenant_id (é null), então para ele o filtro é pulado — ele consulta todas
+// as carteiras.
+//
+// Q fica deliberadamente sem constraint estrutural (em vez de
+// `Q extends { eq: ... }`): com os tipos de query builder do Supabase, uma
+// constraint recursiva faz o TypeScript estourar profundidade de
+// instanciação ("Type instantiation is excessively deep"). O cast para `any`
+// aqui dentro é seguro porque toda chamada real passa um builder que tem
+// `.eq()`; o tipo de retorno da função continua sendo Q para quem chama.
+export function scopeToTenant<Q>(query: Q, ctx: Pick<AuthContext, "tenantId" | "isSuperAdmin">): Q {
+  if (ctx.isSuperAdmin) return query
+  return (query as any).eq("tenant_id", ctx.tenantId)
+}

@@ -1,10 +1,10 @@
 "use server"
 
 import { createAdminClient } from "@/lib/supabase-server"
-import { getSession } from "@/lib/session"
 import { headers } from "next/headers"
 import { CURRENT_TERMS_VERSION } from "@/types/terms"
 import type { TermsAcceptanceWithUser } from "@/types/terms"
+import { requireAuth, requireRole, scopeToTenant } from "@/lib/auth-utils"
 
 /**
  * Verifica se o usuário aceitou a versão atual dos termos
@@ -14,12 +14,13 @@ export async function checkTermsAcceptance(userId?: string): Promise<{
   version: string
   acceptedAt: string | null
 }> {
-  const session = await getSession()
-  const targetUserId = userId || session?.colaboradorId
+  const ctx = await requireAuth()
 
-  if (!targetUserId) {
+  if (userId && userId !== ctx.colaboradorId && !ctx.isSuperAdmin) {
     return { accepted: false, version: CURRENT_TERMS_VERSION, acceptedAt: null }
   }
+
+  const targetUserId = userId || ctx.colaboradorId
 
   const supabase = await createAdminClient()
 
@@ -50,27 +51,27 @@ export async function acceptTerms(userId: string): Promise<{
   success: boolean
   error?: string
 }> {
-  if (!userId) {
+  const ctx = await requireAuth()
+
+  if (userId !== ctx.colaboradorId && !ctx.isSuperAdmin) {
     return { success: false, error: "Usuário não identificado" }
   }
 
   const supabase = await createAdminClient()
   const headersList = await headers()
 
-  // Captura informações do request
   const userAgent = headersList.get("user-agent") || null
   const forwardedFor = headersList.get("x-forwarded-for")
   const realIp = headersList.get("x-real-ip")
   const ipAddress = forwardedFor?.split(",")[0].trim() || realIp || null
 
-  // Extrai informações do dispositivo do user-agent
   let deviceInfo = null
   if (userAgent) {
     const isMobile = /mobile|android|iphone|ipad|tablet/i.test(userAgent)
     const isWindows = /windows/i.test(userAgent)
     const isMac = /macintosh|mac os/i.test(userAgent)
     const isLinux = /linux/i.test(userAgent)
-    
+
     let os = "Unknown"
     if (isWindows) os = "Windows"
     else if (isMac) os = "macOS"
@@ -84,7 +85,6 @@ export async function acceptTerms(userId: string): Promise<{
     })
   }
 
-  // Verifica se já existe um registro para esta versão
   const { data: existing } = await supabase
     .from("user_terms_acceptance")
     .select("id")
@@ -93,7 +93,6 @@ export async function acceptTerms(userId: string): Promise<{
     .maybeSingle()
 
   if (existing) {
-    // Atualiza o registro existente
     const { error } = await supabase
       .from("user_terms_acceptance")
       .update({
@@ -110,7 +109,6 @@ export async function acceptTerms(userId: string): Promise<{
       return { success: false, error: "Erro ao registrar aceite dos termos" }
     }
   } else {
-    // Cria novo registro
     const { error } = await supabase.from("user_terms_acceptance").insert({
       user_id: userId,
       version: CURRENT_TERMS_VERSION,
@@ -119,6 +117,7 @@ export async function acceptTerms(userId: string): Promise<{
       ip_address: ipAddress,
       device_info: deviceInfo,
       user_agent: userAgent,
+      tenant_id: ctx.tenantId,
     })
 
     if (error) {
@@ -137,7 +136,9 @@ export async function declineTerms(userId: string): Promise<{
   success: boolean
   error?: string
 }> {
-  if (!userId) {
+  const ctx = await requireAuth()
+
+  if (userId !== ctx.colaboradorId && !ctx.isSuperAdmin) {
     return { success: false, error: "Usuário não identificado" }
   }
 
@@ -149,7 +150,6 @@ export async function declineTerms(userId: string): Promise<{
   const realIp = headersList.get("x-real-ip")
   const ipAddress = forwardedFor?.split(",")[0].trim() || realIp || null
 
-  // Registra a recusa para auditoria
   const { error } = await supabase.from("user_terms_acceptance").insert({
     user_id: userId,
     version: CURRENT_TERMS_VERSION,
@@ -158,10 +158,10 @@ export async function declineTerms(userId: string): Promise<{
     ip_address: ipAddress,
     device_info: null,
     user_agent: userAgent,
+    tenant_id: ctx.tenantId,
   })
 
   if (error && error.code !== "23505") {
-    // Ignora erro de duplicata
     console.error("[v0] Error recording terms decline:", error)
   }
 
@@ -179,17 +179,30 @@ export async function listTermsAcceptances(filters?: {
   data: TermsAcceptanceWithUser[]
   error?: string
 }> {
-  const session = await getSession()
-
-  if (!session || !["Admin", "Financeiro", "Gestor"].includes(session.tipoAcesso)) {
+  // Nomes de papel corrigidos: o enum real é Adm/Gerente, não Admin/Gestor —
+  // do jeito que estava, essa checagem nunca batia com ninguém.
+  let ctx
+  try {
+    ctx = await requireRole(["Adm", "Financeiro", "Gerente"])
+  } catch {
     return { data: [], error: "Sem permissão para visualizar aceites" }
   }
 
   const supabase = await createAdminClient()
 
+  // user_terms_acceptance referencia colaboradores por user_id — escopamos
+  // via essa lista de ids em vez de scopeToTenant direto na query.
+  const { data: colaboradoresDoTenant } = await scopeToTenant(supabase.from("colaboradores").select("id"), ctx)
+  const idsDoTenant = colaboradoresDoTenant?.map((c: { id: string }) => c.id) || []
+
+  if (idsDoTenant.length === 0) {
+    return { data: [] }
+  }
+
   let query = supabase
     .from("user_terms_acceptance")
     .select("*")
+    .in("user_id", idsDoTenant)
     .order("created_at", { ascending: false })
 
   if (filters?.version) {
@@ -207,16 +220,12 @@ export async function listTermsAcceptances(filters?: {
     return { data: [], error: "Erro ao listar aceites" }
   }
 
-  // Busca informações dos usuários
   const userIds = [...new Set(acceptances?.map((a) => a.user_id) || [])]
-  
-  const { data: colaboradores } = await supabase
-    .from("colaboradores")
-    .select("id, nome_completo, email")
-    .in("id", userIds)
+
+  const { data: colaboradores } = await supabase.from("colaboradores").select("id, nome_completo, email").in("id", userIds)
 
   const colaboradoresMap = new Map(
-    colaboradores?.map((c) => [c.id, { nome_completo: c.nome_completo, email: c.email }]) || []
+    colaboradores?.map((c) => [c.id, { nome_completo: c.nome_completo, email: c.email }]) || [],
   )
 
   const result: TermsAcceptanceWithUser[] = (acceptances || []).map((acceptance) => ({
@@ -224,14 +233,13 @@ export async function listTermsAcceptances(filters?: {
     colaborador: colaboradoresMap.get(acceptance.user_id),
   }))
 
-  // Filtra por busca se necessário
   if (filters?.search) {
     const searchLower = filters.search.toLowerCase()
     return {
       data: result.filter(
         (item) =>
           item.colaborador?.nome_completo.toLowerCase().includes(searchLower) ||
-          item.colaborador?.email.toLowerCase().includes(searchLower)
+          item.colaborador?.email.toLowerCase().includes(searchLower),
       ),
     }
   }
@@ -248,9 +256,10 @@ export async function getTermsAcceptanceStats(): Promise<{
   pendingAcceptance: number
   declinedCurrentVersion: number
 }> {
-  const session = await getSession()
-
-  if (!session || !["Admin", "Financeiro", "Gestor"].includes(session.tipoAcesso)) {
+  let ctx
+  try {
+    ctx = await requireRole(["Adm", "Financeiro", "Gerente"])
+  } catch {
     return {
       totalUsers: 0,
       acceptedCurrentVersion: 0,
@@ -261,23 +270,29 @@ export async function getTermsAcceptanceStats(): Promise<{
 
   const supabase = await createAdminClient()
 
-  // Total de usuários ativos
-  const { count: totalUsers } = await supabase
-    .from("colaboradores")
-    .select("*", { count: "exact", head: true })
-    .eq("ativo", true)
+  const { count: totalUsers } = await scopeToTenant(
+    supabase.from("colaboradores").select("*", { count: "exact", head: true }).eq("ativo", true),
+    ctx,
+  )
 
-  // Aceites da versão atual
+  const { data: colaboradoresDoTenant } = await scopeToTenant(supabase.from("colaboradores").select("id"), ctx)
+  const idsDoTenant = colaboradoresDoTenant?.map((c: { id: string }) => c.id) || []
+
+  if (idsDoTenant.length === 0) {
+    return { totalUsers: totalUsers || 0, acceptedCurrentVersion: 0, pendingAcceptance: totalUsers || 0, declinedCurrentVersion: 0 }
+  }
+
   const { count: acceptedCurrentVersion } = await supabase
     .from("user_terms_acceptance")
     .select("*", { count: "exact", head: true })
+    .in("user_id", idsDoTenant)
     .eq("version", CURRENT_TERMS_VERSION)
     .eq("accepted", true)
 
-  // Recusas da versão atual
   const { count: declinedCurrentVersion } = await supabase
     .from("user_terms_acceptance")
     .select("*", { count: "exact", head: true })
+    .in("user_id", idsDoTenant)
     .eq("version", CURRENT_TERMS_VERSION)
     .eq("accepted", false)
 

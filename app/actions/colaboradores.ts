@@ -3,25 +3,11 @@
 import { getSupabaseServerClient } from "@/lib/supabase-server"
 import type { NovoColaborador } from "@/types/colaborador"
 import { revalidatePath } from "next/cache"
-import { getSession } from "@/lib/session"
+import { requireAuth, requireRole, scopeToTenant } from "@/lib/auth-utils"
 import bcrypt from "bcryptjs"
 
-async function checkPermission(requiredRoles: string[]) {
-  const session = await getSession()
-
-  if (!session) {
-    throw new Error("Usuário não autenticado")
-  }
-
-  if (!requiredRoles.includes(session.tipoAcesso)) {
-    throw new Error("Você não tem permissão para realizar esta ação")
-  }
-
-  return session
-}
-
 export async function criarColaborador(data: NovoColaborador) {
-  await checkPermission(["Adm", "Financeiro"])
+  const ctx = await requireRole(["Adm", "Financeiro"])
 
   const supabase = await getSupabaseServerClient()
 
@@ -30,6 +16,8 @@ export async function criarColaborador(data: NovoColaborador) {
     throw new Error("Email inválido")
   }
 
+  // Email é único globalmente (login não tem seletor de carteira), então essa
+  // checagem não é escopada por tenant de propósito.
   const { data: emailExistente } = await supabase
     .from("colaboradores")
     .select("email")
@@ -41,12 +29,14 @@ export async function criarColaborador(data: NovoColaborador) {
   }
 
   if (data.tipo_acesso === "Supervisor" && data.equipe_id) {
-    const { data: supervisorExistente } = await supabase
-      .from("colaboradores")
-      .select("nome_completo, equipe_id")
-      .eq("equipe_id", data.equipe_id)
-      .eq("tipo_acesso", "Supervisor")
-      .maybeSingle()
+    const { data: supervisorExistente } = await scopeToTenant(
+      supabase
+        .from("colaboradores")
+        .select("nome_completo, equipe_id")
+        .eq("equipe_id", data.equipe_id)
+        .eq("tipo_acesso", "Supervisor"),
+      ctx,
+    ).maybeSingle()
 
     if (supervisorExistente) {
       const { data: equipe } = await supabase.from("equipes").select("nome").eq("id", data.equipe_id).single()
@@ -76,6 +66,7 @@ export async function criarColaborador(data: NovoColaborador) {
       centro_custo_id: data.centro_custo_id || null,
       senha_hash: hashedPassword,
       user_id: null,
+      tenant_id: ctx.tenantId,
     })
     .select()
     .single()
@@ -93,131 +84,15 @@ export async function criarColaborador(data: NovoColaborador) {
   return colaborador
 }
 
-export async function listarColaboradores() {
-  const supabase = await getSupabaseServerClient()
-  const session = await getSession()
-
-  if (!session) {
-    throw new Error("Usuário não autenticado")
-  }
-
+async function buscarColaboradoresComBloqueio(
+  supabase: Awaited<ReturnType<typeof getSupabaseServerClient>>,
+  data: any[],
+) {
   const tresDiasAtras = new Date()
   tresDiasAtras.setDate(tresDiasAtras.getDate() - 3)
   const dataLimite = tresDiasAtras.toISOString()
 
-  if (session.tipoAcesso === "Supervisor") {
-    const { data: equipes, error: equipesError } = await supabase
-      .from("equipes")
-      .select("id")
-      .eq("supervisor_id", session.colaboradorId)
-
-    if (equipesError) {
-      console.error("[v0] Erro ao buscar equipes do supervisor:", equipesError)
-      throw new Error("Erro ao buscar equipes")
-    }
-
-    const equipeIds = equipes.map((e) => e.id)
-
-    if (equipeIds.length === 0) {
-      return []
-    }
-
-    const { data, error } = await supabase
-      .from("colaboradores")
-      .select("*, equipe:equipes!equipe_id(nome)")
-      .in("equipe_id", equipeIds)
-      .in("tipo_acesso", ["Colaborador"])
-      .order("created_at", { ascending: false })
-
-    if (error) {
-      console.error("[v0] Erro ao listar colaboradores:", error)
-      throw new Error("Erro ao listar colaboradores")
-    }
-
-    const colaboradoresComBloqueio = await Promise.all(
-      data.map(async (colaborador) => {
-        const { data: pedidoRecente } = await supabase
-          .from("pedidos_pagamento")
-          .select("created_at")
-          .eq("colaborador_id", colaborador.id)
-          .gte("created_at", dataLimite)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle()
-
-        return {
-          ...colaborador,
-          bloqueado: !!pedidoRecente,
-          data_ultimo_pedido: pedidoRecente?.created_at,
-        }
-      }),
-    )
-
-    return colaboradoresComBloqueio
-  }
-
-  if (session.tipoAcesso === "Gerente") {
-    const { data: gerenteEquipes, error: gerenteEquipesError } = await supabase
-      .from("gerentes_equipes")
-      .select("equipe_id")
-      .eq("gerente_id", session.colaboradorId)
-
-    if (gerenteEquipesError) {
-      console.error("[v0] Erro ao buscar equipes do gerente:", gerenteEquipesError)
-      throw new Error("Erro ao buscar equipes do gerente")
-    }
-
-    const equipeIds = gerenteEquipes.map((e) => e.equipe_id)
-
-    if (equipeIds.length === 0) {
-      return []
-    }
-
-    const { data, error } = await supabase
-      .from("colaboradores")
-      .select("*, equipe:equipes!equipe_id(nome)")
-      .in("equipe_id", equipeIds)
-      .in("tipo_acesso", ["Colaborador", "Supervisor"])
-      .order("created_at", { ascending: false })
-
-    if (error) {
-      console.error("[v0] Erro ao listar colaboradores:", error)
-      throw new Error("Erro ao listar colaboradores")
-    }
-
-    const colaboradoresComBloqueio = await Promise.all(
-      data.map(async (colaborador) => {
-        const { data: pedidoRecente } = await supabase
-          .from("pedidos_pagamento")
-          .select("created_at")
-          .eq("colaborador_id", colaborador.id)
-          .gte("created_at", dataLimite)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle()
-
-        return {
-          ...colaborador,
-          bloqueado: !!pedidoRecente,
-          data_ultimo_pedido: pedidoRecente?.created_at,
-        }
-      }),
-    )
-
-    return colaboradoresComBloqueio
-  }
-
-  const { data, error } = await supabase
-    .from("colaboradores")
-    .select("*, equipe:equipes!equipe_id(nome)")
-    .order("created_at", { ascending: false })
-
-  if (error) {
-    console.error("[v0] Erro ao listar colaboradores:", error)
-    throw new Error("Erro ao listar colaboradores")
-  }
-
-  const colaboradoresComBloqueio = await Promise.all(
+  return Promise.all(
     data.map(async (colaborador) => {
       const { data: pedidoRecente } = await supabase
         .from("pedidos_pagamento")
@@ -235,17 +110,95 @@ export async function listarColaboradores() {
       }
     }),
   )
+}
 
-  return colaboradoresComBloqueio
+export async function listarColaboradores() {
+  const ctx = await requireAuth()
+  const supabase = await getSupabaseServerClient()
+
+  if (ctx.tipoAcesso === "Supervisor") {
+    const { data: equipes, error: equipesError } = await supabase
+      .from("equipes")
+      .select("id")
+      .eq("supervisor_id", ctx.colaboradorId)
+
+    if (equipesError) {
+      console.error("[v0] Erro ao buscar equipes do supervisor:", equipesError)
+      throw new Error("Erro ao buscar equipes")
+    }
+
+    const equipeIds = equipes.map((e) => e.id)
+    if (equipeIds.length === 0) return []
+
+    const { data, error } = await scopeToTenant(
+      supabase
+        .from("colaboradores")
+        .select("*, equipe:equipes!equipe_id(nome)")
+        .in("equipe_id", equipeIds)
+        .in("tipo_acesso", ["Colaborador"]),
+      ctx,
+    ).order("created_at", { ascending: false })
+
+    if (error) {
+      console.error("[v0] Erro ao listar colaboradores:", error)
+      throw new Error("Erro ao listar colaboradores")
+    }
+
+    return buscarColaboradoresComBloqueio(supabase, data)
+  }
+
+  if (ctx.tipoAcesso === "Gerente") {
+    const { data: gerenteEquipes, error: gerenteEquipesError } = await supabase
+      .from("gerentes_equipes")
+      .select("equipe_id")
+      .eq("gerente_id", ctx.colaboradorId)
+
+    if (gerenteEquipesError) {
+      console.error("[v0] Erro ao buscar equipes do gerente:", gerenteEquipesError)
+      throw new Error("Erro ao buscar equipes do gerente")
+    }
+
+    const equipeIds = gerenteEquipes.map((e) => e.equipe_id)
+    if (equipeIds.length === 0) return []
+
+    const { data, error } = await scopeToTenant(
+      supabase
+        .from("colaboradores")
+        .select("*, equipe:equipes!equipe_id(nome)")
+        .in("equipe_id", equipeIds)
+        .in("tipo_acesso", ["Colaborador", "Supervisor"]),
+      ctx,
+    ).order("created_at", { ascending: false })
+
+    if (error) {
+      console.error("[v0] Erro ao listar colaboradores:", error)
+      throw new Error("Erro ao listar colaboradores")
+    }
+
+    return buscarColaboradoresComBloqueio(supabase, data)
+  }
+
+  const { data, error } = await scopeToTenant(
+    supabase.from("colaboradores").select("*, equipe:equipes!equipe_id(nome)"),
+    ctx,
+  ).order("created_at", { ascending: false })
+
+  if (error) {
+    console.error("[v0] Erro ao listar colaboradores:", error)
+    throw new Error("Erro ao listar colaboradores")
+  }
+
+  return buscarColaboradoresComBloqueio(supabase, data)
 }
 
 export async function getColaboradores() {
+  const ctx = await requireAuth()
   const supabase = await getSupabaseServerClient()
 
-  const { data, error } = await supabase
-    .from("colaboradores")
-    .select("id, nome_completo, email")
-    .order("nome_completo", { ascending: true })
+  const { data, error } = await scopeToTenant(
+    supabase.from("colaboradores").select("id, nome_completo, email"),
+    ctx,
+  ).order("nome_completo", { ascending: true })
 
   if (error) {
     console.error("[v0] Erro ao listar colaboradores para faturas:", error)
@@ -256,21 +209,29 @@ export async function getColaboradores() {
     return []
   }
 
-  return (data || []).map(col => ({
+  return data.map((col) => ({
     id: col.id,
     nome: col.nome_completo,
-    email: col.email
+    email: col.email,
   }))
 }
 
 export async function deletarColaborador(id: string) {
-  await checkPermission(["Adm", "Financeiro"])
-
+  const ctx = await requireRole(["Adm", "Financeiro"])
   const supabase = await getSupabaseServerClient()
 
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
   if (!uuidRegex.test(id)) {
     throw new Error("ID inválido")
+  }
+
+  const { data: colaborador } = await scopeToTenant(
+    supabase.from("colaboradores").select("user_id").eq("id", id),
+    ctx,
+  ).maybeSingle()
+
+  if (!colaborador) {
+    throw new Error("Colaborador não encontrado")
   }
 
   const { data: pedidos, error: pedidosError } = await supabase
@@ -290,12 +251,6 @@ export async function deletarColaborador(id: string) {
     )
   }
 
-  const { data: colaborador } = await supabase.from("colaboradores").select("user_id").eq("id", id).maybeSingle()
-
-  if (!colaborador) {
-    throw new Error("Colaborador não encontrado")
-  }
-
   const { error } = await supabase.from("colaboradores").delete().eq("id", id)
 
   if (error) {
@@ -307,8 +262,7 @@ export async function deletarColaborador(id: string) {
 }
 
 export async function alterarStatusAtivoColaborador(id: string, ativo: boolean) {
-  const session = await checkPermission(["Adm", "Financeiro"])
-
+  const ctx = await requireRole(["Adm", "Financeiro"])
   const supabase = await getSupabaseServerClient()
 
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -316,28 +270,42 @@ export async function alterarStatusAtivoColaborador(id: string, ativo: boolean) 
     throw new Error("ID inválido")
   }
 
-  if (id === session.colaboradorId && !ativo) {
+  if (id === ctx.colaboradorId && !ativo) {
     throw new Error("Você não pode desativar sua própria conta")
   }
 
-  const { error } = await supabase.from("colaboradores").update({ ativo }).eq("id", id)
+  const { data, error } = await scopeToTenant(supabase.from("colaboradores").update({ ativo }).eq("id", id), ctx)
+    .select("id")
+    .maybeSingle()
 
   if (error) {
     console.error("[v0] Erro ao alterar status do colaborador:", error)
     throw new Error(`Erro ao ${ativo ? "reativar" : "desativar"} colaborador`)
   }
 
+  if (!data) {
+    throw new Error("Colaborador não encontrado")
+  }
+
   revalidatePath("/cadastros/colaboradores")
 }
 
 export async function atualizarColaborador(id: string, data: Partial<NovoColaborador>) {
-  const session = await checkPermission(["Adm", "Financeiro"])
-
+  const ctx = await requireRole(["Adm", "Financeiro"])
   const supabase = await getSupabaseServerClient()
 
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
   if (!uuidRegex.test(id)) {
     throw new Error("ID inválido")
+  }
+
+  const { data: colaboradorNoTenant } = await scopeToTenant(
+    supabase.from("colaboradores").select("id").eq("id", id),
+    ctx,
+  ).maybeSingle()
+
+  if (!colaboradorNoTenant) {
+    throw new Error("Colaborador não encontrado")
   }
 
   if (data.email) {
@@ -347,6 +315,7 @@ export async function atualizarColaborador(id: string, data: Partial<NovoColabor
     }
     data.email = sanitizedEmail
 
+    // Global de propósito — ver comentário em criarColaborador.
     const { data: emailExistente } = await supabase
       .from("colaboradores")
       .select("email, id")
@@ -360,13 +329,15 @@ export async function atualizarColaborador(id: string, data: Partial<NovoColabor
   }
 
   if (data.tipo_acesso === "Supervisor" && data.equipe_id) {
-    const { data: supervisorExistente } = await supabase
-      .from("colaboradores")
-      .select("nome_completo, equipe_id, id")
-      .eq("equipe_id", data.equipe_id)
-      .eq("tipo_acesso", "Supervisor")
-      .neq("id", id)
-      .maybeSingle()
+    const { data: supervisorExistente } = await scopeToTenant(
+      supabase
+        .from("colaboradores")
+        .select("nome_completo, equipe_id, id")
+        .eq("equipe_id", data.equipe_id)
+        .eq("tipo_acesso", "Supervisor")
+        .neq("id", id),
+      ctx,
+    ).maybeSingle()
 
     if (supervisorExistente) {
       const { data: equipe } = await supabase.from("equipes").select("nome").eq("id", data.equipe_id).single()
@@ -382,7 +353,8 @@ export async function atualizarColaborador(id: string, data: Partial<NovoColabor
   if (data.email) updateData.email = data.email
   if (data.cnpj) updateData.cnpj = data.cnpj
   if (data.data_nascimento) updateData.data_nascimento = data.data_nascimento
-  if (data.data_aniversario_contrato !== undefined) updateData.data_aniversario_contrato = data.data_aniversario_contrato || null
+  if (data.data_aniversario_contrato !== undefined)
+    updateData.data_aniversario_contrato = data.data_aniversario_contrato || null
   if (data.tipo_acesso) updateData.tipo_acesso = data.tipo_acesso
   if (data.salario !== undefined) updateData.salario = data.salario
   if ("equipe_id" in data) updateData.equipe_id = data.equipe_id ?? null
@@ -411,7 +383,8 @@ export async function atualizarColaborador(id: string, data: Partial<NovoColabor
         tipo_reajuste: "valor",
         valor_reajuste: data.salario - colaboradorAtual.salario,
         motivo: "Alteração direta no cadastro do colaborador",
-        aplicado_por: session.colaboradorId,
+        aplicado_por: ctx.colaboradorId,
+        tenant_id: ctx.tenantId,
       })
 
       if (historicoError) {
@@ -441,6 +414,7 @@ export async function atualizarColaborador(id: string, data: Partial<NovoColabor
 }
 
 export async function listarColaboradoresGerente(gerenteId: string) {
+  const ctx = await requireAuth()
   const supabase = await getSupabaseServerClient()
 
   const { data: gerenteEquipes, error: gerenteEquipesError } = await supabase
@@ -454,16 +428,12 @@ export async function listarColaboradoresGerente(gerenteId: string) {
   }
 
   const equipeIds = gerenteEquipes.map((e) => e.equipe_id)
+  if (equipeIds.length === 0) return []
 
-  if (equipeIds.length === 0) {
-    return []
-  }
-
-  const { data, error } = await supabase
-    .from("colaboradores")
-    .select("*, equipe:equipes!equipe_id(nome)")
-    .in("equipe_id", equipeIds)
-    .order("created_at", { ascending: false })
+  const { data, error } = await scopeToTenant(
+    supabase.from("colaboradores").select("*, equipe:equipes!equipe_id(nome)").in("equipe_id", equipeIds),
+    ctx,
+  ).order("created_at", { ascending: false })
 
   if (error) {
     console.error("[v0] Erro ao listar colaboradores:", error)
@@ -474,67 +444,40 @@ export async function listarColaboradoresGerente(gerenteId: string) {
 }
 
 export async function listarColaboradoresComGerente() {
+  const ctx = await requireAuth()
   const supabase = await getSupabaseServerClient()
-  const session = await getSession()
 
-  if (!session) {
-    throw new Error("Usuário não autenticado")
-  }
-
-  const tresDiasAtras = new Date()
-  tresDiasAtras.setDate(tresDiasAtras.getDate() - 3)
-  const dataLimite = tresDiasAtras.toISOString()
-
-  if (session.tipoAcesso === "Supervisor") {
+  if (ctx.tipoAcesso === "Supervisor") {
     const { data: supervisorData } = await supabase
       .from("colaboradores")
       .select("equipe_id")
-      .eq("id", session.colaboradorId)
+      .eq("id", ctx.colaboradorId)
       .single()
 
-    if (!supervisorData?.equipe_id) {
-      return []
-    }
+    if (!supervisorData?.equipe_id) return []
 
-    const { data, error } = await supabase
-      .from("colaboradores")
-      .select("*, equipe:equipes!equipe_id(nome)")
-      .eq("equipe_id", supervisorData.equipe_id)
-      .in("tipo_acesso", ["Supervisor", "Colaborador"])
-      .order("created_at", { ascending: false })
+    const { data, error } = await scopeToTenant(
+      supabase
+        .from("colaboradores")
+        .select("*, equipe:equipes!equipe_id(nome)")
+        .eq("equipe_id", supervisorData.equipe_id)
+        .in("tipo_acesso", ["Supervisor", "Colaborador"]),
+      ctx,
+    ).order("created_at", { ascending: false })
 
     if (error) {
       console.error("[v0] Erro ao listar colaboradores:", error)
       throw new Error("Erro ao listar colaboradores")
     }
 
-    const colaboradoresComBloqueio = await Promise.all(
-      data.map(async (colaborador) => {
-        const { data: pedidoRecente } = await supabase
-          .from("pedidos_pagamento")
-          .select("created_at")
-          .eq("colaborador_id", colaborador.id)
-          .gte("created_at", dataLimite)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle()
-
-        return {
-          ...colaborador,
-          bloqueado: !!pedidoRecente,
-          data_ultimo_pedido: pedidoRecente?.created_at,
-        }
-      }),
-    )
-
-    return colaboradoresComBloqueio
+    return buscarColaboradoresComBloqueio(supabase, data)
   }
 
-  if (session.tipoAcesso === "Gerente") {
+  if (ctx.tipoAcesso === "Gerente") {
     const { data: gerenteEquipes, error: gerenteEquipesError } = await supabase
       .from("gerentes_equipes")
       .select("equipe_id")
-      .eq("gerente_id", session.colaboradorId)
+      .eq("gerente_id", ctx.colaboradorId)
 
     if (gerenteEquipesError) {
       console.error("[v0] Erro ao buscar equipes do gerente:", gerenteEquipesError)
@@ -542,84 +485,46 @@ export async function listarColaboradoresComGerente() {
     }
 
     const equipeIds = gerenteEquipes.map((e) => e.equipe_id)
+    if (equipeIds.length === 0) return []
 
-    if (equipeIds.length === 0) {
-      return []
-    }
-
-    const { data, error } = await supabase
-      .from("colaboradores")
-      .select("*, equipe:equipes!equipe_id(nome)")
-      .or(`equipe_id.in.(${equipeIds.join(",")}),id.eq.${session.colaboradorId}`)
-      .in("tipo_acesso", ["Colaborador", "Supervisor", "Gerente"])
-      .order("created_at", { ascending: false })
+    const { data, error } = await scopeToTenant(
+      supabase
+        .from("colaboradores")
+        .select("*, equipe:equipes!equipe_id(nome)")
+        .or(`equipe_id.in.(${equipeIds.join(",")}),id.eq.${ctx.colaboradorId}`)
+        .in("tipo_acesso", ["Colaborador", "Supervisor", "Gerente"]),
+      ctx,
+    ).order("created_at", { ascending: false })
 
     if (error) {
       console.error("[v0] Erro ao listar colaboradores:", error)
       throw new Error("Erro ao listar colaboradores")
     }
 
-    const colaboradoresComBloqueio = await Promise.all(
-      data.map(async (colaborador) => {
-        const { data: pedidoRecente } = await supabase
-          .from("pedidos_pagamento")
-          .select("created_at")
-          .eq("colaborador_id", colaborador.id)
-          .gte("created_at", dataLimite)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle()
-
-        return {
-          ...colaborador,
-          bloqueado: !!pedidoRecente,
-          data_ultimo_pedido: pedidoRecente?.created_at,
-        }
-      }),
-    )
-
-    return colaboradoresComBloqueio
+    return buscarColaboradoresComBloqueio(supabase, data)
   }
 
-  const { data, error } = await supabase
-    .from("colaboradores")
-    .select("*, equipe:equipes!equipe_id(nome)")
-    .order("created_at", { ascending: false })
+  const { data, error } = await scopeToTenant(
+    supabase.from("colaboradores").select("*, equipe:equipes!equipe_id(nome)"),
+    ctx,
+  ).order("created_at", { ascending: false })
 
   if (error) {
     console.error("[v0] Erro ao listar colaboradores:", error)
     throw new Error("Erro ao listar colaboradores")
   }
 
-  const colaboradoresComBloqueio = await Promise.all(
-    data.map(async (colaborador) => {
-      const { data: pedidoRecente } = await supabase
-        .from("pedidos_pagamento")
-        .select("created_at")
-        .eq("colaborador_id", colaborador.id)
-        .gte("created_at", dataLimite)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle()
-
-      return {
-        ...colaborador,
-        bloqueado: !!pedidoRecente,
-        data_ultimo_pedido: pedidoRecente?.created_at,
-      }
-    }),
-  )
-
-  return colaboradoresComBloqueio
+  return buscarColaboradoresComBloqueio(supabase, data)
 }
 
 export async function exportarColaboradoresExcel() {
+  const ctx = await requireAuth()
   const supabase = await getSupabaseServerClient()
 
-  const { data, error } = await supabase
-    .from("colaboradores")
-    .select("*, equipe:equipes!equipe_id(nome)")
-    .order("nome_completo", { ascending: true })
+  const { data, error } = await scopeToTenant(
+    supabase.from("colaboradores").select("*, equipe:equipes!equipe_id(nome)"),
+    ctx,
+  ).order("nome_completo", { ascending: true })
 
   if (error) {
     console.error("[v0] Erro ao exportar colaboradores:", error)

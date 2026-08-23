@@ -3,6 +3,7 @@
 import { createAdminClient } from "@/lib/supabase-server"
 import type { DadosNotaFiscal, ResultadoValidacao } from "@/types/nota-fiscal"
 import { limparCpfCnpj } from "@/lib/nfse-parser"
+import { requireAuth, requireRole, scopeToTenant } from "@/lib/auth-utils"
 
 // Função para validar nota fiscal
 export async function validarNotaFiscal(
@@ -10,6 +11,7 @@ export async function validarNotaFiscal(
   colaboradorId: string,
   dados: DadosNotaFiscal,
 ): Promise<ResultadoValidacao> {
+  const ctx = await requireAuth()
   const supabase = await createAdminClient()
   const mensagens: string[] = []
 
@@ -19,11 +21,10 @@ export async function validarNotaFiscal(
   console.log("[v0] Dados da nota:", JSON.stringify(dados, null, 2))
 
   // 1. VALIDAÇÃO DE IDENTIDADE
-  const { data: colaborador } = await supabase
-    .from("colaboradores")
-    .select("nome_completo, cnpj")
-    .eq("id", colaboradorId)
-    .single()
+  const { data: colaborador } = await scopeToTenant(
+    supabase.from("colaboradores").select("nome_completo, cnpj").eq("id", colaboradorId),
+    ctx,
+  ).single()
 
   const cnpjColaboradorLimpo = limparCpfCnpj(colaborador?.cnpj || "")
   const cnpjNotaLimpo = limparCpfCnpj(dados.cpf_cnpj_prestador)
@@ -40,11 +41,10 @@ export async function validarNotaFiscal(
   }
 
   // 2. VALIDAÇÃO DE COMPETÊNCIA
-  const { data: pedido } = await supabase
-    .from("pedidos_pagamento")
-    .select("created_at, data_previsao_pagamento")
-    .eq("id", pedidoId)
-    .single()
+  const { data: pedido } = await scopeToTenant(
+    supabase.from("pedidos_pagamento").select("created_at, data_previsao_pagamento").eq("id", pedidoId),
+    ctx,
+  ).single()
 
   const dataPedido = new Date(pedido?.created_at || "")
   const mesPedido = dataPedido.getMonth() + 1
@@ -59,11 +59,10 @@ export async function validarNotaFiscal(
   }
 
   // 3. VALIDAÇÃO DE VALOR (FLEXÍVEL - PERMITE SEM KM E SEM DESCONTO)
-  const { data: pedidoCompleto, error: pedidoError } = await supabase
-    .from("pedidos_pagamento")
-    .select("*")
-    .eq("id", pedidoId)
-    .single()
+  const { data: pedidoCompleto } = await scopeToTenant(
+    supabase.from("pedidos_pagamento").select("*").eq("id", pedidoId),
+    ctx,
+  ).single()
 
   if (!pedidoCompleto) {
     mensagens.push("Pedido não encontrado no sistema")
@@ -107,12 +106,14 @@ export async function validarNotaFiscal(
   }
 
   // 4. VALIDAÇÃO DE DUPLICIDADE
-  const { data: notasDuplicadas } = await supabase
-    .from("notas_fiscais")
-    .select("id, numero_nfse, pedido_id")
-    .or(`numero_nfse.eq.${dados.numero_nfse},chave_acesso.eq.${dados.chave_acesso || ""}`)
-    .neq("pedido_id", pedidoId)
-    .limit(1)
+  const { data: notasDuplicadas } = await scopeToTenant(
+    supabase
+      .from("notas_fiscais")
+      .select("id, numero_nfse, pedido_id")
+      .or(`numero_nfse.eq.${dados.numero_nfse},chave_acesso.eq.${dados.chave_acesso || ""}`)
+      .neq("pedido_id", pedidoId),
+    ctx,
+  ).limit(1)
 
   const notaExistente = notasDuplicadas && notasDuplicadas.length > 0 ? notasDuplicadas[0] : null
   const validacao_duplicidade = !notaExistente
@@ -145,7 +146,17 @@ export async function anexarNotaFiscal(
   arquivoXmlUrl: string,
   arquivoPdfUrl?: string,
 ) {
+  const ctx = await requireAuth()
   const supabase = await createAdminClient()
+
+  const { data: pedidoNoTenant } = await scopeToTenant(
+    supabase.from("pedidos_pagamento").select("id").eq("id", pedidoId),
+    ctx,
+  ).maybeSingle()
+
+  if (!pedidoNoTenant) {
+    return { success: false, error: "Pedido não encontrado" }
+  }
 
   console.log("[v0] ===== ANEXANDO NOTA FISCAL =====")
   console.log("[v0] Pedido ID:", pedidoId)
@@ -185,6 +196,7 @@ export async function anexarNotaFiscal(
       validacao_valor: validacao.validacao_valor,
       validacao_duplicidade: validacao.validacao_duplicidade,
       status: "aprovado",
+      tenant_id: ctx.tenantId,
     })
     .select()
     .single()
@@ -222,18 +234,19 @@ export async function anexarNotaFiscal(
 
 // Função para listar notas fiscais (para o financeiro)
 export async function listarNotasFiscais() {
+  const ctx = await requireRole(["Adm", "Financeiro"])
   const supabase = await createAdminClient()
 
-  const { data, error } = await supabase
-    .from("notas_fiscais")
-    .select(
+  const { data, error } = await scopeToTenant(
+    supabase.from("notas_fiscais").select(
       `
       *,
       colaboradores(nome_completo, cnpj),
       pedidos_pagamento(valor_total, created_at, status)
     `,
-    )
-    .order("created_at", { ascending: false })
+    ),
+    ctx,
+  ).order("created_at", { ascending: false })
 
   if (error) {
     console.error("Erro ao listar notas fiscais:", error)
@@ -245,23 +258,33 @@ export async function listarNotasFiscais() {
 
 // Função para aprovar/rejeitar nota manualmente (financeiro)
 export async function aprovarRejeitarNota(notaId: string, status: "aprovado" | "rejeitado", observacao?: string) {
+  const ctx = await requireRole(["Adm", "Financeiro"])
   const supabase = await createAdminClient()
 
-  const { data: user } = await supabase.auth.getUser()
-
-  const { error } = await supabase
-    .from("notas_fiscais")
-    .update({
-      status,
-      aprovado_por: user.user?.id,
-      data_aprovacao: new Date().toISOString(),
-      observacao_financeiro: observacao,
-    })
-    .eq("id", notaId)
+  const { data, error } = await scopeToTenant(
+    supabase
+      .from("notas_fiscais")
+      .update({
+        status,
+        // A app nunca usou o Supabase Auth — supabase.auth.getUser() sempre
+        // veio vazio aqui, então aprovado_por nunca era gravado de verdade.
+        aprovado_por: ctx.colaboradorId,
+        data_aprovacao: new Date().toISOString(),
+        observacao_financeiro: observacao,
+      })
+      .eq("id", notaId),
+    ctx,
+  )
+    .select("id")
+    .maybeSingle()
 
   if (error) {
     console.error("Erro ao atualizar nota fiscal:", error)
     return { success: false, error: error.message }
+  }
+
+  if (!data) {
+    return { success: false, error: "Nota fiscal não encontrada" }
   }
 
   return { success: true }

@@ -3,27 +3,31 @@
 import { createAdminClient } from "@/lib/supabase-server"
 import { revalidatePath } from "next/cache"
 import type { Equipe, NovaEquipe } from "@/types/equipe"
+import { requireAuth, requireRole, scopeToTenant } from "@/lib/auth-utils"
 
 export async function listarEquipes(): Promise<Equipe[]> {
+  const ctx = await requireAuth()
   const supabase = await createAdminClient()
 
-  const { data, error } = await supabase
-    .from("equipes")
-    .select(`
+  const { data, error } = await scopeToTenant(
+    supabase.from("equipes").select(`
       *,
       supervisor:colaboradores!supervisor_id(
         id,
         nome_completo
       )
-    `)
-    .order("nome", { ascending: true })
+    `),
+    ctx,
+  ).order("nome", { ascending: true })
 
   if (error) {
     console.error("[v0] Erro ao listar equipes:", error)
     throw new Error("Erro ao listar equipes")
   }
 
-  // Buscar TODOS os gerentes de todas as equipes em uma única query
+  // Busca todos os vínculos gerente/equipe de uma vez (sem tenant_id próprio,
+  // é uma tabela de junção — o isolamento vem do fato de só usarmos abaixo os
+  // equipe.id que já passaram pelo scopeToTenant acima).
   const { data: todasGerentesData } = await supabase.from("gerentes_equipes").select(`
       equipe_id,
       colaboradores!gerentes_equipes_gerente_id_fkey(
@@ -32,7 +36,6 @@ export async function listarEquipes(): Promise<Equipe[]> {
       )
     `)
 
-  // Organizar gerentes por equipe
   const gerentesPorEquipe = new Map<string, any[]>()
   todasGerentesData?.forEach((item: any) => {
     if (!gerentesPorEquipe.has(item.equipe_id)) {
@@ -43,7 +46,6 @@ export async function listarEquipes(): Promise<Equipe[]> {
     }
   })
 
-  // Montar resposta final
   const equipesComGerentes = (data || []).map((equipe: any) => ({
     ...equipe,
     gerentes: gerentesPorEquipe.get(equipe.id) || [],
@@ -53,11 +55,13 @@ export async function listarEquipes(): Promise<Equipe[]> {
 }
 
 export async function criarEquipe(equipe: NovaEquipe): Promise<void> {
+  const ctx = await requireRole(["Adm", "Financeiro"])
   const supabase = await createAdminClient()
 
   const { error } = await supabase.from("equipes").insert({
     nome: equipe.nome,
     supervisor_id: equipe.supervisor_id,
+    tenant_id: ctx.tenantId,
   })
 
   if (error) {
@@ -69,39 +73,53 @@ export async function criarEquipe(equipe: NovaEquipe): Promise<void> {
 }
 
 export async function atualizarEquipe(id: string, equipe: Partial<NovaEquipe>): Promise<void> {
+  const ctx = await requireRole(["Adm", "Financeiro"])
   const supabase = await createAdminClient()
 
-  const { error } = await supabase.from("equipes").update(equipe).eq("id", id)
+  const { data, error } = await scopeToTenant(supabase.from("equipes").update(equipe).eq("id", id), ctx)
+    .select("id")
+    .maybeSingle()
 
   if (error) {
     console.error("[v0] Erro ao atualizar equipe:", error)
     throw new Error("Erro ao atualizar equipe")
   }
 
+  if (!data) {
+    throw new Error("Equipe não encontrada")
+  }
+
   revalidatePath("/cadastros/equipes")
 }
 
 export async function deletarEquipe(id: string): Promise<void> {
+  const ctx = await requireRole(["Adm", "Financeiro"])
   const supabase = await createAdminClient()
 
-  const { error } = await supabase.from("equipes").delete().eq("id", id)
+  const { data, error } = await scopeToTenant(supabase.from("equipes").delete().eq("id", id), ctx)
+    .select("id")
+    .maybeSingle()
 
   if (error) {
     console.error("[v0] Erro ao deletar equipe:", error)
     throw new Error("Erro ao deletar equipe")
   }
 
+  if (!data) {
+    throw new Error("Equipe não encontrada")
+  }
+
   revalidatePath("/cadastros/equipes")
 }
 
 export async function listarSupervisores(): Promise<Array<{ id: string; nome_completo: string }>> {
+  const ctx = await requireAuth()
   const supabase = await createAdminClient()
 
-  const { data, error } = await supabase
-    .from("colaboradores")
-    .select("id, nome_completo")
-    .eq("tipo_acesso", "Supervisor")
-    .order("nome_completo", { ascending: true })
+  const { data, error } = await scopeToTenant(
+    supabase.from("colaboradores").select("id, nome_completo").eq("tipo_acesso", "Supervisor"),
+    ctx,
+  ).order("nome_completo", { ascending: true })
 
   if (error) {
     console.error("[v0] Erro ao listar supervisores:", error)
@@ -112,13 +130,13 @@ export async function listarSupervisores(): Promise<Array<{ id: string; nome_com
 }
 
 export async function listarColaboradoresPorEquipe(equipeId: string) {
+  const ctx = await requireAuth()
   const supabase = await createAdminClient()
 
-  const { data, error } = await supabase
-    .from("colaboradores")
-    .select("id, nome_completo, tipo_acesso, email")
-    .eq("equipe_id", equipeId)
-    .order("nome_completo", { ascending: true })
+  const { data, error } = await scopeToTenant(
+    supabase.from("colaboradores").select("id, nome_completo, tipo_acesso, email").eq("equipe_id", equipeId),
+    ctx,
+  ).order("nome_completo", { ascending: true })
 
   if (error) {
     console.error("[v0] Erro ao listar colaboradores da equipe:", error)
@@ -128,8 +146,24 @@ export async function listarColaboradoresPorEquipe(equipeId: string) {
   return data || []
 }
 
-export async function vincularGerenteEquipe(gerenteId: string, equipeId: string): Promise<void> {
+async function verificarEquipeNoTenant(equipeId: string, ctx: { tenantId: string | null; isSuperAdmin: boolean }) {
   const supabase = await createAdminClient()
+  const { data } = await scopeToTenant(supabase.from("equipes").select("id").eq("id", equipeId), ctx).maybeSingle()
+  return !!data
+}
+
+export async function vincularGerenteEquipe(gerenteId: string, equipeId: string): Promise<void> {
+  const ctx = await requireRole(["Adm", "Financeiro"])
+  const supabase = await createAdminClient()
+
+  const [equipeOk, gerente] = await Promise.all([
+    verificarEquipeNoTenant(equipeId, ctx),
+    scopeToTenant(supabase.from("colaboradores").select("id").eq("id", gerenteId), ctx).maybeSingle(),
+  ])
+
+  if (!equipeOk || !gerente.data) {
+    throw new Error("Equipe ou gerente não encontrado")
+  }
 
   const { data: existing } = await supabase
     .from("gerentes_equipes")
@@ -156,6 +190,12 @@ export async function vincularGerenteEquipe(gerenteId: string, equipeId: string)
 }
 
 export async function desvincularGerenteEquipe(gerenteId: string, equipeId: string): Promise<void> {
+  const ctx = await requireRole(["Adm", "Financeiro"])
+
+  if (!(await verificarEquipeNoTenant(equipeId, ctx))) {
+    throw new Error("Equipe não encontrada")
+  }
+
   const supabase = await createAdminClient()
 
   const { error } = await supabase
@@ -173,6 +213,7 @@ export async function desvincularGerenteEquipe(gerenteId: string, equipeId: stri
 }
 
 export async function listarEquipesPorGerente(gerenteId: string): Promise<Equipe[]> {
+  const ctx = await requireAuth()
   const supabase = await createAdminClient()
 
   const { data, error } = await supabase
@@ -193,17 +234,20 @@ export async function listarEquipesPorGerente(gerenteId: string): Promise<Equipe
     throw new Error("Erro ao listar equipes do gerente")
   }
 
-  return data?.map((item: any) => item.equipe).filter(Boolean) || []
+  const equipes = data?.map((item: any) => item.equipe).filter(Boolean) || []
+
+  if (ctx.isSuperAdmin) return equipes
+  return equipes.filter((equipe: any) => equipe.tenant_id === ctx.tenantId)
 }
 
 export async function listarGerentes(): Promise<Array<{ id: string; nome_completo: string }>> {
+  const ctx = await requireAuth()
   const supabase = await createAdminClient()
 
-  const { data, error } = await supabase
-    .from("colaboradores")
-    .select("id, nome_completo")
-    .eq("tipo_acesso", "Gerente")
-    .order("nome_completo", { ascending: true })
+  const { data, error } = await scopeToTenant(
+    supabase.from("colaboradores").select("id, nome_completo").eq("tipo_acesso", "Gerente"),
+    ctx,
+  ).order("nome_completo", { ascending: true })
 
   if (error) {
     console.error("[v0] Erro ao listar gerentes:", error)
@@ -213,14 +257,16 @@ export async function listarGerentes(): Promise<Array<{ id: string; nome_complet
   return data || []
 }
 
-export async function listarColaboradoresSemEquipe(): Promise<Array<{ id: string; nome_completo: string; tipo_acesso: string; email: string }>> {
+export async function listarColaboradoresSemEquipe(): Promise<
+  Array<{ id: string; nome_completo: string; tipo_acesso: string; email: string }>
+> {
+  const ctx = await requireAuth()
   const supabase = await createAdminClient()
 
-  const { data, error } = await supabase
-    .from("colaboradores")
-    .select("id, nome_completo, tipo_acesso, email")
-    .is("equipe_id", null)
-    .order("nome_completo", { ascending: true })
+  const { data, error } = await scopeToTenant(
+    supabase.from("colaboradores").select("id, nome_completo, tipo_acesso, email").is("equipe_id", null),
+    ctx,
+  ).order("nome_completo", { ascending: true })
 
   if (error) {
     console.error("[v0] Erro ao listar colaboradores sem equipe:", error)
@@ -231,16 +277,28 @@ export async function listarColaboradoresSemEquipe(): Promise<Array<{ id: string
 }
 
 export async function vincularColaboradorEquipe(colaboradorId: string, equipeId: string): Promise<void> {
+  const ctx = await requireRole(["Adm", "Financeiro"])
+
+  if (!(await verificarEquipeNoTenant(equipeId, ctx))) {
+    throw new Error("Equipe não encontrada")
+  }
+
   const supabase = await createAdminClient()
 
-  const { error } = await supabase
-    .from("colaboradores")
-    .update({ equipe_id: equipeId })
-    .eq("id", colaboradorId)
+  const { data, error } = await scopeToTenant(
+    supabase.from("colaboradores").update({ equipe_id: equipeId }).eq("id", colaboradorId),
+    ctx,
+  )
+    .select("id")
+    .maybeSingle()
 
   if (error) {
     console.error("[v0] Erro ao vincular colaborador:", error)
     throw new Error("Erro ao vincular colaborador a equipe")
+  }
+
+  if (!data) {
+    throw new Error("Colaborador não encontrado")
   }
 
   revalidatePath("/cadastros/equipes")
@@ -248,16 +306,23 @@ export async function vincularColaboradorEquipe(colaboradorId: string, equipeId:
 }
 
 export async function removerColaboradorEquipe(colaboradorId: string): Promise<void> {
+  const ctx = await requireRole(["Adm", "Financeiro"])
   const supabase = await createAdminClient()
 
-  const { error } = await supabase
-    .from("colaboradores")
-    .update({ equipe_id: null })
-    .eq("id", colaboradorId)
+  const { data, error } = await scopeToTenant(
+    supabase.from("colaboradores").update({ equipe_id: null }).eq("id", colaboradorId),
+    ctx,
+  )
+    .select("id")
+    .maybeSingle()
 
   if (error) {
     console.error("[v0] Erro ao remover colaborador da equipe:", error)
     throw new Error("Erro ao remover colaborador da equipe")
+  }
+
+  if (!data) {
+    throw new Error("Colaborador não encontrado")
   }
 
   revalidatePath("/cadastros/equipes")
@@ -265,26 +330,25 @@ export async function removerColaboradorEquipe(colaboradorId: string): Promise<v
 }
 
 export async function buscarEquipe(equipeId: string): Promise<Equipe | null> {
+  const ctx = await requireAuth()
   const supabase = await createAdminClient()
 
-  const { data, error } = await supabase
-    .from("equipes")
-    .select(`
+  const { data, error } = await scopeToTenant(
+    supabase.from("equipes").select(`
       *,
       supervisor:colaboradores!supervisor_id(
         id,
         nome_completo
       )
-    `)
-    .eq("id", equipeId)
-    .single()
+    `).eq("id", equipeId),
+    ctx,
+  ).single()
 
   if (error) {
     console.error("[v0] Erro ao buscar equipe:", error)
     return null
   }
 
-  // Buscar gerentes
   const { data: gerentesData } = await supabase
     .from("gerentes_equipes")
     .select(`
@@ -301,12 +365,29 @@ export async function buscarEquipe(equipeId: string): Promise<Equipe | null> {
 }
 
 export async function sincronizarGerentesEquipe(equipeId: string, gerentesIds: string[]): Promise<void> {
+  const ctx = await requireRole(["Adm", "Financeiro"])
+
+  if (!(await verificarEquipeNoTenant(equipeId, ctx))) {
+    throw new Error("Equipe não encontrada")
+  }
+
   const supabase = await createAdminClient()
+
+  // Restringe aos gerentes que de fato pertencem à mesma carteira da equipe,
+  // ignorando qualquer id fora do tenant que por acaso venha no array.
+  const gerentesValidosIds = new Set<string>()
+  if (gerentesIds.length > 0) {
+    const { data: gerentesValidos } = await scopeToTenant(
+      supabase.from("colaboradores").select("id").in("id", gerentesIds),
+      ctx,
+    )
+    gerentesValidos?.forEach((g: { id: string }) => gerentesValidosIds.add(g.id))
+  }
 
   await supabase.from("gerentes_equipes").delete().eq("equipe_id", equipeId)
 
-  if (gerentesIds.length > 0) {
-    const inserts = gerentesIds.map((gerenteId) => ({
+  if (gerentesValidosIds.size > 0) {
+    const inserts = Array.from(gerentesValidosIds).map((gerenteId) => ({
       gerente_id: gerenteId,
       equipe_id: equipeId,
     }))

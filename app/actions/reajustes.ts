@@ -1,32 +1,23 @@
 "use server"
 
 import { getSupabaseServerClient } from "@/lib/supabase-server"
-import { getSession } from "@/lib/session"
 import { revalidatePath } from "next/cache"
 import type { NovoReajuste, HistoricoReajuste } from "@/types/reajuste"
+import { requireAuth, requireRole, scopeToTenant } from "@/lib/auth-utils"
 
 export async function aplicarReajuste(data: NovoReajuste) {
-  const supabase = await getSupabaseServerClient()
-  const session = await getSession()
-
-  if (!session) {
-    throw new Error("Usuário não autenticado")
-  }
-
   // Apenas Financeiro e Adm podem aplicar reajustes
-  if (session.tipoAcesso !== "Financeiro" && session.tipoAcesso !== "Adm") {
-    throw new Error("Você não tem permissão para aplicar reajustes")
-  }
+  const ctx = await requireRole(["Financeiro", "Adm"])
+  const supabase = await getSupabaseServerClient()
 
   if (!data.motivo || data.motivo.trim() === "") {
     throw new Error("O motivo do reajuste é obrigatório")
   }
 
-  const { data: colaborador, error: colaboradorError } = await supabase
-    .from("colaboradores")
-    .select("salario, nome_completo")
-    .eq("id", data.colaborador_id)
-    .single()
+  const { data: colaborador, error: colaboradorError } = await scopeToTenant(
+    supabase.from("colaboradores").select("salario, nome_completo").eq("id", data.colaborador_id),
+    ctx,
+  ).single()
 
   if (colaboradorError || !colaborador) {
     throw new Error("Colaborador não encontrado")
@@ -34,7 +25,6 @@ export async function aplicarReajuste(data: NovoReajuste) {
 
   const salarioAnterior = colaborador.salario
 
-  // Calcular novo salário
   let salarioNovo: number
   if (data.tipo_reajuste === "porcentagem") {
     salarioNovo = salarioAnterior + salarioAnterior * (data.valor_reajuste / 100)
@@ -42,7 +32,6 @@ export async function aplicarReajuste(data: NovoReajuste) {
     salarioNovo = salarioAnterior + data.valor_reajuste
   }
 
-  // Arredondar para 2 casas decimais
   salarioNovo = Math.round(salarioNovo * 100) / 100
 
   const { error: historicoError } = await supabase.from("historico_reajustes").insert({
@@ -52,7 +41,8 @@ export async function aplicarReajuste(data: NovoReajuste) {
     tipo_reajuste: data.tipo_reajuste,
     valor_reajuste: data.valor_reajuste,
     motivo: data.motivo,
-    aplicado_por: session.colaboradorId,
+    aplicado_por: ctx.colaboradorId,
+    tenant_id: ctx.tenantId,
   })
 
   if (historicoError) {
@@ -63,14 +53,17 @@ export async function aplicarReajuste(data: NovoReajuste) {
   // Atualizar salário do colaborador e avançar a data de aniversário de contrato em 1 ano
   const novaDataAniversario = new Date()
   novaDataAniversario.setFullYear(novaDataAniversario.getFullYear() + 1)
-  
-  const { error: updateError } = await supabase
-    .from("colaboradores")
-    .update({
-      salario: salarioNovo,
-      data_aniversario_contrato: novaDataAniversario.toISOString().split("T")[0],
-    })
-    .eq("id", data.colaborador_id)
+
+  const { error: updateError } = await scopeToTenant(
+    supabase
+      .from("colaboradores")
+      .update({
+        salario: salarioNovo,
+        data_aniversario_contrato: novaDataAniversario.toISOString().split("T")[0],
+      })
+      .eq("id", data.colaborador_id),
+    ctx,
+  )
 
   if (updateError) {
     console.error("[v0] Erro ao atualizar colaborador:", updateError)
@@ -96,32 +89,25 @@ export async function aplicarReajuste(data: NovoReajuste) {
 
 export async function listarHistoricoReajustes(colaboradorId?: string): Promise<HistoricoReajuste[]> {
   try {
+    const ctx = await requireAuth()
     const supabase = await getSupabaseServerClient()
-    const session = await getSession()
 
-    if (!session) {
-      throw new Error("Usuário não autenticado")
-    }
-
-    let query = supabase
-      .from("historico_reajustes")
-      .select(
+    let query = scopeToTenant(
+      supabase.from("historico_reajustes").select(
         `
         *,
         colaborador:colaboradores!historico_reajustes_colaborador_id_fkey(nome_completo),
         aplicador:colaboradores!historico_reajustes_aplicado_por_fkey(nome_completo)
       `,
-      )
-      .order("created_at", { ascending: false })
+      ),
+      ctx,
+    ).order("created_at", { ascending: false })
 
-    // Filtrar por colaborador se especificado
     if (colaboradorId) {
       query = query.eq("colaborador_id", colaboradorId)
     } else {
-      // Aplicar filtros de permissão
-      if (session.tipoAcesso === "Supervisor") {
-        // Supervisor vê apenas reajustes dos colaboradores da sua equipe
-        const { data: equipes } = await supabase.from("equipes").select("id").eq("supervisor_id", session.colaboradorId)
+      if (ctx.tipoAcesso === "Supervisor") {
+        const { data: equipes } = await supabase.from("equipes").select("id").eq("supervisor_id", ctx.colaboradorId)
 
         if (equipes && equipes.length > 0) {
           const equipeIds = equipes.map((e) => e.id)
@@ -136,25 +122,22 @@ export async function listarHistoricoReajustes(colaboradorId?: string): Promise<
         } else {
           return []
         }
-      } else if (session.tipoAcesso === "Colaborador") {
-        // Colaborador vê apenas seus próprios reajustes
-        query = query.eq("colaborador_id", session.colaboradorId)
+      } else if (ctx.tipoAcesso === "Colaborador") {
+        query = query.eq("colaborador_id", ctx.colaboradorId)
       }
-      // Gerente, Financeiro e Adm veem todos
+      // Gerente, Financeiro e Adm veem todos (dentro da própria carteira)
     }
 
     const { data, error } = await query
 
     if (error) {
       console.error("[v0] Erro ao listar histórico de reajustes:", error)
-      // Return empty array instead of throwing to prevent page crash
       return []
     }
 
     return data || []
   } catch (error) {
     console.error("[v0] Erro ao listar histórico de reajustes:", error)
-    // Return empty array on any error including rate limiting
     return []
   }
 }

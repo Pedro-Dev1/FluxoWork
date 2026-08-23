@@ -3,17 +3,22 @@
 import { getSupabaseServerClient } from "@/lib/supabase-server"
 import type { NovoPedido, AcaoPedido } from "@/types/pedido"
 import { revalidatePath } from "next/cache"
-import { getSession } from "@/lib/session"
 import { put } from "@vercel/blob"
 import { calcularComposicaoPedido, calcularComposicaoReembolsoKm } from "@/lib/domain/calculo-financeiro"
 import { enviarEmailNotaFiscalPendente } from "@/lib/email"
+import { requireAuth, requireRole, scopeToTenant, type AuthContext } from "@/lib/auth-utils"
 
 export async function criarPedido(data: NovoPedido) {
+  const ctx = await requireRole(["Supervisor", "Adm", "Gerente", "Financeiro"])
   const supabase = await getSupabaseServerClient()
 
-  const session = await getSession()
-  if (!session || !["Supervisor", "Adm", "Gerente", "Financeiro"].includes(session.tipoAcesso)) {
-    throw new Error("Você não tem permissão para criar pedidos")
+  const { data: colaboradorAlvo } = await scopeToTenant(
+    supabase.from("colaboradores").select("id").eq("id", data.colaborador_id),
+    ctx,
+  ).maybeSingle()
+
+  if (!colaboradorAlvo) {
+    throw new Error("Colaborador não encontrado")
   }
 
   if (data.tipo_pedido !== "reembolso_km" && data.conducao > 0) {
@@ -74,7 +79,7 @@ export async function criarPedido(data: NovoPedido) {
   }
 
   // Gerente e Financeiro pulam aprovacao do gerente
-  const statusInicial = ["Gerente", "Financeiro"].includes(session.tipoAcesso) ? "pendente_financeiro" : "pendente_gerente"
+  const statusInicial = ["Gerente", "Financeiro"].includes(ctx.tipoAcesso) ? "pendente_financeiro" : "pendente_gerente"
 
   const dadosPedido =
     data.tipo_pedido === "reembolso_km"
@@ -98,7 +103,8 @@ export async function criarPedido(data: NovoPedido) {
           valor_total: valorTotal,
           salario_base: 0,
           status: statusInicial,
-          criado_por_colaborador_id: session.colaboradorId,
+          criado_por_colaborador_id: ctx.colaboradorId,
+          tenant_id: ctx.tenantId,
         }
       : {
           colaborador_id: data.colaborador_id,
@@ -120,7 +126,8 @@ export async function criarPedido(data: NovoPedido) {
           valor_total: valorTotal,
           salario_base: salarioBaseUsado,
           status: statusInicial,
-          criado_por_colaborador_id: session.colaboradorId,
+          criado_por_colaborador_id: ctx.colaboradorId,
+          tenant_id: ctx.tenantId,
         }
 
   const { data: pedido, error } = await supabase.from("pedidos_pagamento").insert(dadosPedido).select().single()
@@ -135,17 +142,13 @@ export async function criarPedido(data: NovoPedido) {
 }
 
 export async function acaoGerente(data: AcaoPedido) {
+  const ctx = await requireRole(["Gerente", "Adm"])
   const supabase = await getSupabaseServerClient()
-
-  const session = await getSession()
-  if (!session || (session.tipoAcesso !== "Gerente" && session.tipoAcesso !== "Adm")) {
-    throw new Error("Apenas gerentes podem realizar esta ação")
-  }
 
   const updates: any = {
     observacao_gerente: data.observacao,
     data_aprovacao_gerente: new Date().toISOString(),
-    aprovado_por_gerente_id: session.colaboradorId,
+    aprovado_por_gerente_id: ctx.colaboradorId,
   }
 
   if (data.acao === "aprovar") {
@@ -160,11 +163,20 @@ export async function acaoGerente(data: AcaoPedido) {
     updates.correcao_solicitada_por = "gerente"
   }
 
-  const { error } = await supabase.from("pedidos_pagamento").update(updates).eq("id", data.pedido_id)
+  const { data: atualizado, error } = await scopeToTenant(
+    supabase.from("pedidos_pagamento").update(updates).eq("id", data.pedido_id),
+    ctx,
+  )
+    .select("id")
+    .maybeSingle()
 
   if (error) {
     console.error("[v0] Erro ao atualizar pedido:", error)
     throw new Error("Erro ao processar ação")
+  }
+
+  if (!atualizado) {
+    throw new Error("Pedido não encontrado")
   }
 
   revalidatePath("/aprovacoes")
@@ -172,21 +184,13 @@ export async function acaoGerente(data: AcaoPedido) {
 }
 
 export async function acaoFinanceiro(data: AcaoPedido) {
+  const ctx = await requireRole(["Financeiro", "Adm"])
   const supabase = await getSupabaseServerClient()
-
-  const session = await getSession()
-  if (!session) {
-    throw new Error("Usuário não autenticado")
-  }
-
-  if (!["Financeiro", "Adm"].includes(session.tipoAcesso)) {
-    throw new Error("Apenas financeiro pode realizar esta ação")
-  }
 
   const updates: any = {
     observacao_financeiro: data.observacao,
     data_aprovacao_financeiro: new Date().toISOString(),
-    aprovado_por_financeiro_id: session.colaboradorId,
+    aprovado_por_financeiro_id: ctx.colaboradorId,
   }
 
   if (data.acao === "aprovar") {
@@ -210,16 +214,20 @@ export async function acaoFinanceiro(data: AcaoPedido) {
     updates.correcao_solicitada_por = "financeiro"
   }
 
-  const { data: pedidoAtualizado, error } = await supabase
-    .from("pedidos_pagamento")
-    .update(updates)
-    .eq("id", data.pedido_id)
+  const { data: pedidoAtualizado, error } = await scopeToTenant(
+    supabase.from("pedidos_pagamento").update(updates).eq("id", data.pedido_id),
+    ctx,
+  )
     .select("valor_total, colaborador:colaboradores!colaborador_id(nome_completo, email)")
-    .single()
+    .maybeSingle()
 
   if (error) {
     console.error("[v0] Erro ao atualizar pedido:", error)
     throw new Error("Erro ao processar ação")
+  }
+
+  if (!pedidoAtualizado) {
+    throw new Error("Pedido não encontrado")
   }
 
   if (data.acao === "aprovar") {
@@ -242,11 +250,11 @@ export async function acaoFinanceiro(data: AcaoPedido) {
 }
 
 export async function listarPedidos() {
+  const ctx = await requireAuth()
   const supabase = await getSupabaseServerClient()
 
-  const { data, error } = await supabase
-    .from("pedidos_pagamento")
-    .select(
+  const { data, error } = await scopeToTenant(
+    supabase.from("pedidos_pagamento").select(
       `
       *,
       colaborador:colaboradores!colaborador_id (
@@ -259,8 +267,9 @@ export async function listarPedidos() {
         tipo_acesso
       )
     `,
-    )
-    .order("created_at", { ascending: false })
+    ),
+    ctx,
+  ).order("created_at", { ascending: false })
 
   if (error) {
     console.error("[v0] Erro ao listar pedidos:", error)
@@ -271,9 +280,10 @@ export async function listarPedidos() {
 }
 
 export async function listarPedidosComFiltros(filtros?: { dataInicio?: string; dataFim?: string }) {
+  const ctx = await requireAuth()
   const supabase = await getSupabaseServerClient()
 
-  let query = supabase.from("pedidos_pagamento").select(
+  let query = scopeToTenant(supabase.from("pedidos_pagamento").select(
     `
       *,
       colaborador:colaboradores!colaborador_id (
@@ -297,6 +307,8 @@ export async function listarPedidosComFiltros(filtros?: { dataInicio?: string; d
         tipo_acesso
       )
     `,
+    ),
+    ctx,
   )
 
   // Aplicar filtros de data se fornecidos
@@ -323,23 +335,18 @@ export async function listarPedidosComFiltros(filtros?: { dataInicio?: string; d
 }
 
 export async function listarPedidosPendentes() {
+  const ctx = await requireAuth()
   const supabase = await getSupabaseServerClient()
 
-  const session = await getSession()
-
-  if (!session) {
-    throw new Error("Usuário não autenticado")
-  }
-
-  console.log("[v0] Listando pedidos pendentes para:", session.tipoAcesso)
+  console.log("[v0] Listando pedidos pendentes para:", ctx.tipoAcesso)
 
   let statusFiltro: string[] = []
 
-  if (session.tipoAcesso === "Gerente") {
+  if (ctx.tipoAcesso === "Gerente") {
     statusFiltro = ["pendente_gerente"]
-  } else if (session.tipoAcesso === "Financeiro") {
+  } else if (ctx.tipoAcesso === "Financeiro") {
     statusFiltro = ["pendente_financeiro"]
-  } else if (session.tipoAcesso === "Adm") {
+  } else if (ctx.tipoAcesso === "Adm") {
     statusFiltro = ["pendente_gerente", "pendente_financeiro"]
   }
 
@@ -347,12 +354,12 @@ export async function listarPedidosPendentes() {
 
   let colaboradorIds: string[] = []
 
-  if (session.tipoAcesso === "Gerente") {
+  if (ctx.tipoAcesso === "Gerente") {
     // Buscar equipes do gerente
     const { data: gerenteEquipes, error: gerenteEquipesError } = await supabase
       .from("gerentes_equipes")
       .select("equipe_id")
-      .eq("gerente_id", session.colaboradorId)
+      .eq("gerente_id", ctx.colaboradorId)
 
     if (gerenteEquipesError) {
       console.error("[v0] Erro ao buscar equipes do gerente:", gerenteEquipesError)
@@ -385,10 +392,11 @@ export async function listarPedidosPendentes() {
     console.log("[v0] Gerente filtrando por colaboradores das suas equipes:", colaboradorIds.length)
   }
 
-  let query = supabase
-    .from("pedidos_pagamento")
-    .select(
-      `
+  let query = scopeToTenant(
+    supabase
+      .from("pedidos_pagamento")
+      .select(
+        `
       *,
       colaborador:colaboradores!colaborador_id (
         nome_completo,
@@ -401,11 +409,13 @@ export async function listarPedidosPendentes() {
         tipo_acesso
       )
     `,
-    )
-    .in("status", statusFiltro)
-    .or("nota_emitida.is.null,nota_emitida.eq.false") // Apenas pedidos sem nota anexada
+      )
+      .in("status", statusFiltro)
+      .or("nota_emitida.is.null,nota_emitida.eq.false"), // Apenas pedidos sem nota anexada
+    ctx,
+  )
 
-  if (session.tipoAcesso === "Gerente" && colaboradorIds.length > 0) {
+  if (ctx.tipoAcesso === "Gerente" && colaboradorIds.length > 0) {
     query = query.in("colaborador_id", colaboradorIds)
   }
 
@@ -426,18 +436,15 @@ export async function listarPedidosPendentes() {
 export async function listarPedidosParaCorrecao() {
   const supabase = await getSupabaseServerClient()
 
-  const session = await getSession()
+  const ctx = await requireAuth()
 
-  if (!session) {
-    throw new Error("Usuário não autenticado")
-  }
+  console.log("[v0] Listando pedidos para correção do supervisor:", ctx.colaboradorId)
 
-  console.log("[v0] Listando pedidos para correção do supervisor:", session.colaboradorId)
-
-  const { data, error } = await supabase
-    .from("pedidos_pagamento")
-    .select(
-      `
+  const { data, error } = await scopeToTenant(
+    supabase
+      .from("pedidos_pagamento")
+      .select(
+        `
       *,
       colaborador:colaboradores!colaborador_id (
         nome_completo,
@@ -450,10 +457,11 @@ export async function listarPedidosParaCorrecao() {
         tipo_acesso
       )
     `,
-    )
-    .eq("criado_por_colaborador_id", session.colaboradorId)
-    .eq("status", "correcao")
-    .order("created_at", { ascending: false })
+      )
+      .eq("criado_por_colaborador_id", ctx.colaboradorId)
+      .eq("status", "correcao"),
+    ctx,
+  ).order("created_at", { ascending: false })
 
   if (error) {
     console.error("[v0] Erro ao listar pedidos para correção:", error)
@@ -466,19 +474,32 @@ export async function listarPedidosParaCorrecao() {
 }
 
 export async function deletarPedido(id: string) {
+  const ctx = await requireRole(["Adm", "Financeiro"])
   const supabase = await getSupabaseServerClient()
 
-  const { error } = await supabase.from("pedidos_pagamento").delete().eq("id", id)
+  const { data, error } = await scopeToTenant(supabase.from("pedidos_pagamento").delete().eq("id", id), ctx)
+    .select("id")
+    .maybeSingle()
 
   if (error) {
     console.error("[v0] Erro ao deletar pedido:", error)
     throw new Error("Erro ao deletar pedido")
   }
 
+  if (!data) {
+    throw new Error("Pedido não encontrado")
+  }
+
   revalidatePath("/pedidos")
 }
 
 export async function listarPedidosPorSupervisor(supervisorId: string) {
+  const ctx = await requireAuth()
+
+  if (supervisorId !== ctx.colaboradorId && !ctx.isSuperAdmin) {
+    throw new Error("Sem permissão")
+  }
+
   const supabase = await getSupabaseServerClient()
 
   // Buscar equipes onde o usuário é supervisor
@@ -516,10 +537,11 @@ export async function listarPedidosPorSupervisor(supervisorId: string) {
   }
 
   // Buscar pedidos dos colaboradores da equipe
-  const { data, error } = await supabase
-    .from("pedidos_pagamento")
-    .select(
-      `
+  const { data, error } = await scopeToTenant(
+    supabase
+      .from("pedidos_pagamento")
+      .select(
+        `
       *,
       colaborador:colaboradores!colaborador_id (
         nome_completo,
@@ -542,9 +564,10 @@ export async function listarPedidosPorSupervisor(supervisorId: string) {
         tipo_acesso
       )
     `,
-    )
-    .in("colaborador_id", colaboradorIds)
-    .order("created_at", { ascending: false })
+      )
+      .in("colaborador_id", colaboradorIds),
+    ctx,
+  ).order("created_at", { ascending: false })
 
   if (error) {
     console.error("[v0] Erro ao listar pedidos do supervisor:", error)
@@ -555,6 +578,12 @@ export async function listarPedidosPorSupervisor(supervisorId: string) {
 }
 
 export async function listarPedidosPorGerente(gerenteId: string, filtros?: { dataInicio?: string; dataFim?: string }) {
+  const ctx = await requireAuth()
+
+  if (gerenteId !== ctx.colaboradorId && !ctx.isSuperAdmin) {
+    throw new Error("Sem permissão")
+  }
+
   const supabase = await getSupabaseServerClient()
 
   // Buscar equipes onde o gerente está vinculado
@@ -591,10 +620,11 @@ export async function listarPedidosPorGerente(gerenteId: string, filtros?: { dat
   }
 
   // Buscar pedidos dos colaboradores das equipes
-  let query = supabase
-    .from("pedidos_pagamento")
-    .select(
-      `
+  let query = scopeToTenant(
+    supabase
+      .from("pedidos_pagamento")
+      .select(
+        `
       *,
       colaborador:colaboradores!colaborador_id (
         nome_completo,
@@ -617,8 +647,10 @@ export async function listarPedidosPorGerente(gerenteId: string, filtros?: { dat
         tipo_acesso
       )
     `,
-    )
-    .in("colaborador_id", colaboradorIds)
+      )
+      .in("colaborador_id", colaboradorIds),
+    ctx,
+  )
 
   // Aplicar filtros de data se fornecidos
   if (filtros?.dataInicio) {
@@ -657,19 +689,14 @@ export async function corrigirPedido(
     motivo_desconto?: string
   },
 ) {
+  const ctx = await requireRole(["Supervisor", "Adm", "Gerente"])
   const supabase = await getSupabaseServerClient()
 
-  const session = await getSession()
-  if (!session || (session.tipoAcesso !== "Supervisor" && session.tipoAcesso !== "Adm" && session.tipoAcesso !== "Gerente")) {
-    throw new Error("Sem permissão para corrigir pedidos")
-  }
-
   // Buscar o pedido atual para saber qual era o status anterior
-  const { data: pedidoAtual, error: pedidoError } = await supabase
-    .from("pedidos_pagamento")
-    .select("*, colaborador:colaboradores!colaborador_id(salario)")
-    .eq("id", pedidoId)
-    .single()
+  const { data: pedidoAtual, error: pedidoError } = await scopeToTenant(
+    supabase.from("pedidos_pagamento").select("*, colaborador:colaboradores!colaborador_id(salario)").eq("id", pedidoId),
+    ctx,
+  ).maybeSingle()
 
   if (pedidoError || !pedidoAtual) {
     console.error("[v0] Erro ao buscar pedido:", pedidoError)
@@ -677,7 +704,7 @@ export async function corrigirPedido(
   }
 
   // Gerentes só podem corrigir pedidos que eles mesmos criaram
-  if (session.tipoAcesso === "Gerente" && pedidoAtual.criado_por_colaborador_id !== session.colaboradorId) {
+  if (ctx.tipoAcesso === "Gerente" && pedidoAtual.criado_por_colaborador_id !== ctx.colaboradorId) {
     throw new Error("Você só pode corrigir pedidos que você criou")
   }
 
@@ -744,12 +771,8 @@ export async function corrigirPedido(
 }
 
 export async function marcarNotaEmitida(pedidoId: string, notaFiscalUrl: string) {
+  const ctx = await requireAuth()
   const supabase = await getSupabaseServerClient()
-
-  const session = await getSession()
-  if (!session) {
-    throw new Error("Usuário não autenticado")
-  }
 
   // Verificar se o pedido pertence ao colaborador logado
   const { data: pedido, error: pedidoError } = await supabase
@@ -763,7 +786,7 @@ export async function marcarNotaEmitida(pedidoId: string, notaFiscalUrl: string)
     throw new Error("Pedido não encontrado")
   }
 
-  if (pedido.colaborador_id !== session.colaboradorId) {
+  if (pedido.colaborador_id !== ctx.colaboradorId) {
     throw new Error("Você não tem permissão para marcar esta nota")
   }
 
@@ -847,24 +870,16 @@ export async function listarPedidosParaFinanceiro(filtros?: {
   dataFim?: string
   colaboradorNome?: string
 }) {
+  const ctx = await requireRole(["Financeiro", "Adm"])
   const supabase = await getSupabaseServerClient()
-
-  const session = await getSession()
-
-  if (!session) {
-    throw new Error("Usuário não autenticado")
-  }
-
-  if (!["Financeiro", "Adm"].includes(session.tipoAcesso)) {
-    throw new Error("Apenas financeiro pode acessar esta página")
-  }
 
   console.log("[v0] Listando pedidos para financeiro com filtros:", filtros)
 
-  let query = supabase
-    .from("pedidos_pagamento")
-    .select(
-      `
+  let query = scopeToTenant(
+    supabase
+      .from("pedidos_pagamento")
+      .select(
+        `
       *,
       colaborador:colaboradores!colaborador_id (
         nome_completo,
@@ -886,9 +901,11 @@ export async function listarPedidosParaFinanceiro(filtros?: {
         created_at
       )
     `,
-    )
-    .eq("status", "pendente_financeiro")
-    .eq("nota_emitida", true)
+      )
+      .eq("status", "pendente_financeiro")
+      .eq("nota_emitida", true),
+    ctx,
+  )
 
   // Aplicar filtro de data
   if (filtros?.dataInicio) {
@@ -934,20 +951,16 @@ export async function listarPedidosParaFinanceiro(filtros?: {
 }
 
 export async function listarPedidosComNotaPendente() {
+  const ctx = await requireAuth()
   const supabase = await getSupabaseServerClient()
 
-  const session = await getSession()
+  console.log("[v0] Listando pedidos com nota pendente para:", ctx.tipoAcesso)
 
-  if (!session) {
-    throw new Error("Usuário não autenticado")
-  }
-
-  console.log("[v0] Listando pedidos com nota pendente para:", session.tipoAcesso)
-
-  let query = supabase
-    .from("pedidos_pagamento")
-    .select(
-      `
+  let query = scopeToTenant(
+    supabase
+      .from("pedidos_pagamento")
+      .select(
+        `
       *,
       colaborador:colaboradores!colaborador_id (
         nome_completo,
@@ -960,16 +973,18 @@ export async function listarPedidosComNotaPendente() {
         tipo_acesso
       )
     `,
-    )
-    .eq("tipo_pedido", "completo")
-    .eq("status", "aprovado")
-    .or("nota_emitida.is.null,nota_emitida.eq.false")
+      )
+      .eq("tipo_pedido", "completo")
+      .eq("status", "aprovado")
+      .or("nota_emitida.is.null,nota_emitida.eq.false"),
+    ctx,
+  )
 
-  if (session.tipoAcesso === "Supervisor") {
+  if (ctx.tipoAcesso === "Supervisor") {
     const { data: equipes, error: equipesError } = await supabase
       .from("equipes")
       .select("id")
-      .eq("supervisor_id", session.colaboradorId)
+      .eq("supervisor_id", ctx.colaboradorId)
 
     if (equipesError) {
       console.error("[v0] Erro ao buscar equipes do supervisor:", equipesError)
@@ -999,11 +1014,11 @@ export async function listarPedidosComNotaPendente() {
     }
 
     query = query.in("colaborador_id", colaboradorIds)
-  } else if (session.tipoAcesso === "Gerente") {
+  } else if (ctx.tipoAcesso === "Gerente") {
     const { data: gerenteEquipes, error: gerenteEquipesError } = await supabase
       .from("gerentes_equipes")
       .select("equipe_id")
-      .eq("gerente_id", session.colaboradorId)
+      .eq("gerente_id", ctx.colaboradorId)
 
     if (gerenteEquipesError) {
       console.error("[v0] Erro ao buscar equipes do gerente:", gerenteEquipesError)
@@ -1051,12 +1066,8 @@ export async function listarPedidosComNotaPendente() {
 }
 
 export async function solicitarProrrogacaoPrazo(pedidoId: string, motivo: string) {
+  const ctx = await requireAuth()
   const supabase = await getSupabaseServerClient()
-
-  const session = await getSession()
-  if (!session) {
-    throw new Error("Usuário não autenticado")
-  }
 
   const { data: pedido, error: pedidoError } = await supabase
     .from("pedidos_pagamento")
@@ -1069,7 +1080,7 @@ export async function solicitarProrrogacaoPrazo(pedidoId: string, motivo: string
     throw new Error("Pedido não encontrado")
   }
 
-  if (pedido.colaborador_id !== session.colaboradorId) {
+  if (pedido.colaborador_id !== ctx.colaboradorId) {
     throw new Error("Você não tem permissão para solicitar prorrogação deste pedido")
   }
 
@@ -1100,22 +1111,14 @@ export async function solicitarProrrogacaoPrazo(pedidoId: string, motivo: string
 }
 
 export async function listarSolicitacoesProrrogacao() {
+  const ctx = await requireRole(["Financeiro", "Adm"])
   const supabase = await getSupabaseServerClient()
 
-  const session = await getSession()
-
-  if (!session) {
-    throw new Error("Usuário não autenticado")
-  }
-
-  if (!["Financeiro", "Adm"].includes(session.tipoAcesso)) {
-    throw new Error("Apenas financeiro pode acessar esta página")
-  }
-
-  const { data, error } = await supabase
-    .from("pedidos_pagamento")
-    .select(
-      `
+  const { data, error } = await scopeToTenant(
+    supabase
+      .from("pedidos_pagamento")
+      .select(
+        `
       *,
       colaborador:colaboradores!colaborador_id (
         nome_completo,
@@ -1123,11 +1126,12 @@ export async function listarSolicitacoesProrrogacao() {
         tipo_acesso
       )
     `,
-    )
-    .eq("status", "aguardando_prorrogacao")
-    .eq("prorrogacao_solicitada", true)
-    .is("prorrogacao_aprovada", null)
-    .order("data_solicitacao_prorrogacao", { ascending: true })
+      )
+      .eq("status", "aguardando_prorrogacao")
+      .eq("prorrogacao_solicitada", true)
+      .is("prorrogacao_aprovada", null),
+    ctx,
+  ).order("data_solicitacao_prorrogacao", { ascending: true })
 
   if (error) {
     console.error("[v0] Erro ao listar solicitações de prorrogação:", error)
@@ -1143,17 +1147,8 @@ export async function responderSolicitacaoProrrogacao(
   observacao?: string,
   diasExtensao?: number,
 ) {
+  const ctx = await requireRole(["Financeiro", "Adm"])
   const supabase = await getSupabaseServerClient()
-
-  const session = await getSession()
-
-  if (!session) {
-    throw new Error("Usuário não autenticado")
-  }
-
-  if (!["Financeiro", "Adm"].includes(session.tipoAcesso)) {
-    throw new Error("Apenas financeiro pode aprovar prorrogações")
-  }
 
   const updates: any = {
     observacao_prorrogacao: observacao || null,
@@ -1173,11 +1168,20 @@ export async function responderSolicitacaoProrrogacao(
     updates.prorrogacao_aprovada = false
   }
 
-  const { error } = await supabase.from("pedidos_pagamento").update(updates).eq("id", pedidoId)
+  const { data: atualizado, error } = await scopeToTenant(
+    supabase.from("pedidos_pagamento").update(updates).eq("id", pedidoId),
+    ctx,
+  )
+    .select("id")
+    .maybeSingle()
 
   if (error) {
     console.error("[v0] Erro ao responder solicitação:", error)
     throw new Error("Erro ao responder solicitação de prorrogação")
+  }
+
+  if (!atualizado) {
+    throw new Error("Pedido não encontrado")
   }
 
   revalidatePath("/financeiro")
@@ -1193,28 +1197,19 @@ export async function listarTodosPedidos(filtros?: {
   equipeId?: string
   status?: string
 }) {
+  const ctx = await requireRole(["Adm", "Gerente", "Financeiro"])
   const supabase = await getSupabaseServerClient()
-
-  const session = await getSession()
-
-  if (!session) {
-    throw new Error("Usuário não autenticado")
-  }
-
-  if (!["Adm", "Gerente", "Financeiro"].includes(session.tipoAcesso)) {
-    throw new Error("Acesso negado")
-  }
 
   console.log("[v0] Listando todos os pedidos com filtros:", filtros)
 
   let equipesPermitidas: string[] = []
 
-  if (session.tipoAcesso === "Gerente") {
+  if (ctx.tipoAcesso === "Gerente") {
     // Buscar equipes gerenciadas por este gerente
     const { data: equipesGerente, error: equipesError } = await supabase
       .from("gerentes_equipes")
       .select("equipe_id")
-      .eq("gerente_id", session.colaboradorId)
+      .eq("gerente_id", ctx.colaboradorId)
 
     if (equipesError) {
       console.error("[v0] Erro ao buscar equipes do gerente:", equipesError)
@@ -1229,8 +1224,9 @@ export async function listarTodosPedidos(filtros?: {
     }
   }
 
-  let query = supabase.from("pedidos_pagamento").select(
-    `
+  let query = scopeToTenant(
+    supabase.from("pedidos_pagamento").select(
+      `
       *,
       colaborador:colaboradores!colaborador_id (
         nome_completo,
@@ -1253,6 +1249,8 @@ export async function listarTodosPedidos(filtros?: {
         created_at
       )
     `,
+    ),
+    ctx,
   )
 
   // Aplicar filtro de data
@@ -1281,7 +1279,7 @@ export async function listarTodosPedidos(filtros?: {
 
   let pedidosFiltrados = data || []
 
-  if (session.tipoAcesso === "Gerente" && equipesPermitidas.length > 0) {
+  if (ctx.tipoAcesso === "Gerente" && equipesPermitidas.length > 0) {
     pedidosFiltrados = pedidosFiltrados.filter(
       (pedido) => pedido.colaborador?.equipe_id && equipesPermitidas.includes(pedido.colaborador.equipe_id),
     )
@@ -1310,29 +1308,30 @@ export async function listarTodosPedidos(filtros?: {
 }
 
 export async function aprovarNotaFiscal(pedidoId: string) {
+  const ctx = await requireRole(["Financeiro", "Adm"])
   const supabase = await getSupabaseServerClient()
 
-  const session = await getSession()
-  if (!session) {
-    throw new Error("Usuário não autenticado")
-  }
-
-  if (!["Financeiro", "Adm"].includes(session.tipoAcesso)) {
-    throw new Error("Apenas financeiro pode aprovar notas fiscais")
-  }
-
   try {
-    const { error } = await supabase
-      .from("pedidos_pagamento")
-      .update({
-        status: "nota_recebida",
-        data_nota_recebida: new Date().toISOString(),
-      })
-      .eq("id", pedidoId)
+    const { data, error } = await scopeToTenant(
+      supabase
+        .from("pedidos_pagamento")
+        .update({
+          status: "nota_recebida",
+          data_nota_recebida: new Date().toISOString(),
+        })
+        .eq("id", pedidoId),
+      ctx,
+    )
+      .select("id")
+      .maybeSingle()
 
     if (error) {
       console.error("[v0] Erro ao aprovar nota fiscal:", error)
       throw new Error(`Erro ao aprovar nota fiscal: ${error.message}`)
+    }
+
+    if (!data) {
+      throw new Error("Pedido não encontrado")
     }
   } catch (err) {
     console.error("[v0] Exceção ao aprovar nota fiscal:", err)
@@ -1346,31 +1345,32 @@ export async function aprovarNotaFiscal(pedidoId: string) {
 }
 
 export async function recusarNotaFiscal(pedidoId: string, motivo: string) {
+  const ctx = await requireRole(["Financeiro", "Adm"])
   const supabase = await getSupabaseServerClient()
 
-  const session = await getSession()
-  if (!session) {
-    throw new Error("Usuário não autenticado")
-  }
-
-  if (!["Financeiro", "Adm"].includes(session.tipoAcesso)) {
-    throw new Error("Apenas financeiro pode recusar notas fiscais")
-  }
-
   try {
-    const { error } = await supabase
-      .from("pedidos_pagamento")
-      .update({
-        status: "aprovado",
-        nota_emitida: false,
-        nota_fiscal_url: null,
-        observacao_financeiro: motivo,
-      })
-      .eq("id", pedidoId)
+    const { data, error } = await scopeToTenant(
+      supabase
+        .from("pedidos_pagamento")
+        .update({
+          status: "aprovado",
+          nota_emitida: false,
+          nota_fiscal_url: null,
+          observacao_financeiro: motivo,
+        })
+        .eq("id", pedidoId),
+      ctx,
+    )
+      .select("id")
+      .maybeSingle()
 
     if (error) {
       console.error("[v0] Erro ao recusar nota fiscal:", error)
       throw new Error(`Erro ao recusar nota fiscal: ${error.message}`)
+    }
+
+    if (!data) {
+      throw new Error("Pedido não encontrado")
     }
   } catch (err) {
     console.error("[v0] Exceção ao recusar nota fiscal:", err)
@@ -1384,22 +1384,13 @@ export async function recusarNotaFiscal(pedidoId: string, motivo: string) {
 }
 
 export async function marcarPedidoPago(pedidoId: string) {
+  const ctx = await requireRole(["Financeiro", "Adm"])
   const supabase = await getSupabaseServerClient()
 
-  const session = await getSession()
-  if (!session) {
-    throw new Error("Usuário não autenticado")
-  }
-
-  if (!["Financeiro", "Adm"].includes(session.tipoAcesso)) {
-    throw new Error("Apenas financeiro pode marcar pagamento")
-  }
-
-  const { data: pedido, error: pedidoError } = await supabase
-    .from("pedidos_pagamento")
-    .select("status, tipo_pedido")
-    .eq("id", pedidoId)
-    .single()
+  const { data: pedido, error: pedidoError } = await scopeToTenant(
+    supabase.from("pedidos_pagamento").select("status, tipo_pedido").eq("id", pedidoId),
+    ctx,
+  ).maybeSingle()
 
   if (pedidoError || !pedido) {
     throw new Error("Pedido não encontrado")
@@ -1427,16 +1418,19 @@ export async function marcarPedidoPago(pedidoId: string) {
 
 const DIAS_PARA_EXPIRAR_SEM_NOTA = 15
 
-async function expirarPedidosSemNotaAntigos(supabase: any) {
+async function expirarPedidosSemNotaAntigos(supabase: any, ctx: Pick<AuthContext, "tenantId" | "isSuperAdmin">) {
   const cutoff = new Date()
   cutoff.setDate(cutoff.getDate() - DIAS_PARA_EXPIRAR_SEM_NOTA)
 
-  const { data: candidatos } = await supabase
-    .from("pedidos_pagamento")
-    .select("id, tipo_pedido")
-    .in("status", ["pendente_financeiro", "aprovado"])
-    .is("nota_fiscal_url", null)
-    .lt("created_at", cutoff.toISOString())
+  const { data: candidatos } = await scopeToTenant(
+    supabase
+      .from("pedidos_pagamento")
+      .select("id, tipo_pedido")
+      .in("status", ["pendente_financeiro", "aprovado"])
+      .is("nota_fiscal_url", null)
+      .lt("created_at", cutoff.toISOString()),
+    ctx,
+  )
 
   const idsExpirar = (candidatos || [])
     .filter((p: any) => p.tipo_pedido !== "reembolso_km")
@@ -1453,17 +1447,15 @@ export async function listarPedidosSemNota(filtros?: {
   colaboradorNome?: string
   equipeId?: string
 }) {
+  const ctx = await requireRole(["Financeiro", "Adm"])
   const supabase = await getSupabaseServerClient()
-  const session = await getSession()
 
-  if (!session) throw new Error("Usuário não autenticado")
-  if (!["Financeiro", "Adm"].includes(session.tipoAcesso)) throw new Error("Sem permissão")
+  await expirarPedidosSemNotaAntigos(supabase, ctx)
 
-  await expirarPedidosSemNotaAntigos(supabase)
-
-  let query = supabase
-    .from("pedidos_pagamento")
-    .select(`
+  let query = scopeToTenant(
+    supabase
+      .from("pedidos_pagamento")
+      .select(`
       *,
       colaborador:colaboradores!colaborador_id (
         nome_completo, salario, tipo_acesso, equipe_id, cnpj, email,
@@ -1471,9 +1463,10 @@ export async function listarPedidosSemNota(filtros?: {
       ),
       notas_fiscais ( id )
     `)
-    .in("status", ["pendente_financeiro", "aprovado"])
-    .is("nota_fiscal_url", null)
-    .order("created_at", { ascending: false })
+      .in("status", ["pendente_financeiro", "aprovado"])
+      .is("nota_fiscal_url", null),
+    ctx,
+  ).order("created_at", { ascending: false })
 
   if (filtros?.dataInicio) query = query.gte("created_at", filtros.dataInicio)
   if (filtros?.dataFim) {
@@ -1508,15 +1501,13 @@ export async function listarPedidosComNota(filtros?: {
   colaboradorNome?: string
   equipeId?: string
 }) {
+  const ctx = await requireRole(["Financeiro", "Adm"])
   const supabase = await getSupabaseServerClient()
-  const session = await getSession()
 
-  if (!session) throw new Error("Usuário não autenticado")
-  if (!["Financeiro", "Adm"].includes(session.tipoAcesso)) throw new Error("Sem permissão")
-
-  let query = supabase
-    .from("pedidos_pagamento")
-    .select(`
+  let query = scopeToTenant(
+    supabase
+      .from("pedidos_pagamento")
+      .select(`
       *,
       colaborador:colaboradores!colaborador_id (
         nome_completo, salario, tipo_acesso, equipe_id,
@@ -1530,8 +1521,9 @@ export async function listarPedidosComNota(filtros?: {
 arquivo_xml_url, arquivo_pdf_url, created_at
   )
   `)
-  .in("status", ["pendente_financeiro", "aprovado", "nota_recebida"])
-  .order("created_at", { ascending: false })
+      .in("status", ["pendente_financeiro", "aprovado", "nota_recebida"]),
+    ctx,
+  ).order("created_at", { ascending: false })
 
   if (filtros?.dataInicio) query = query.gte("created_at", filtros.dataInicio)
   if (filtros?.dataFim) {
@@ -1566,24 +1558,16 @@ export async function listarNotasEnviadas(filtros?: {
   colaboradorNome?: string
   equipeId?: string
 }) {
+  const ctx = await requireRole(["Financeiro", "Adm"])
   const supabase = await getSupabaseServerClient()
-
-  const session = await getSession()
-
-  if (!session) {
-    throw new Error("Usuário não autenticado")
-  }
-
-  if (!["Financeiro", "Adm"].includes(session.tipoAcesso)) {
-    throw new Error("Apenas financeiro pode acessar esta página")
-  }
 
   console.log("[v0] Listando notas enviadas com filtros:", filtros)
 
-  let query = supabase
-    .from("pedidos_pagamento")
-    .select(
-      `
+  let query = scopeToTenant(
+    supabase
+      .from("pedidos_pagamento")
+      .select(
+        `
       *,
       colaborador:colaboradores!colaborador_id (
         nome_completo,
@@ -1606,8 +1590,10 @@ export async function listarNotasEnviadas(filtros?: {
         created_at
       )
     `,
-    )
-    .in("status", ["pendente_financeiro", "aprovado", "pago", "nota_recebida"])
+      )
+      .in("status", ["pendente_financeiro", "aprovado", "pago", "nota_recebida"]),
+    ctx,
+  )
 
   // Aplicar filtro de data
   if (filtros?.dataInicio) {
@@ -1654,15 +1640,13 @@ export async function listarPedidosPagos(filtros?: {
   colaboradorNome?: string
   equipeId?: string
 }) {
+  const ctx = await requireRole(["Financeiro", "Adm"])
   const supabase = await getSupabaseServerClient()
-  const session = await getSession()
 
-  if (!session) throw new Error("Usuário não autenticado")
-  if (!["Financeiro", "Adm"].includes(session.tipoAcesso)) throw new Error("Sem permissão")
-
-  let query = supabase
-    .from("pedidos_pagamento")
-    .select(`
+  let query = scopeToTenant(
+    supabase
+      .from("pedidos_pagamento")
+      .select(`
       *,
       colaborador:colaboradores!colaborador_id (
         nome_completo, salario, tipo_acesso, equipe_id
@@ -1675,8 +1659,9 @@ export async function listarPedidosPagos(filtros?: {
         arquivo_xml_url, arquivo_pdf_url, created_at
       )
     `)
-    .eq("status", "pago")
-    .order("created_at", { ascending: false })
+      .eq("status", "pago"),
+    ctx,
+  ).order("created_at", { ascending: false })
 
   if (filtros?.dataInicio) query = query.gte("created_at", filtros.dataInicio)
   if (filtros?.dataFim) {

@@ -3,18 +3,22 @@
 import { getSupabaseServerClient } from "@/lib/supabase-server"
 import { revalidatePath } from "next/cache"
 import type { Boleto, CreateBoletoInput, UpdateBoletoInput } from "@/types/boleto"
+import { requireAuth, requireRole, scopeToTenant } from "@/lib/auth-utils"
 
 export async function listarBoletos() {
+  const ctx = await requireAuth()
   const supabase = await getSupabaseServerClient()
 
-  const { data, error } = await supabase
-    .from("boletos")
-    .select(`
+  const { data, error } = await scopeToTenant(
+    supabase
+      .from("boletos")
+      .select(`
       *,
       centro_custo:centros_custo(id, nome)
     `)
-    .eq("ativo", true)
-    .order("banco", { ascending: true })
+      .eq("ativo", true),
+    ctx,
+  ).order("banco", { ascending: true })
 
   if (error) {
     console.error("[v0] Erro ao listar boletos:", error)
@@ -25,15 +29,16 @@ export async function listarBoletos() {
 }
 
 export async function listarTodosBoletos() {
+  const ctx = await requireAuth()
   const supabase = await getSupabaseServerClient()
 
-  const { data, error } = await supabase
-    .from("boletos")
-    .select(`
+  const { data, error } = await scopeToTenant(
+    supabase.from("boletos").select(`
       *,
       centro_custo:centros_custo(id, nome)
-    `)
-    .order("banco", { ascending: true })
+    `),
+    ctx,
+  ).order("banco", { ascending: true })
 
   if (error) {
     console.error("[v0] Erro ao listar todos os boletos:", error)
@@ -44,9 +49,9 @@ export async function listarTodosBoletos() {
 }
 
 export async function criarBoleto(input: CreateBoletoInput) {
+  const ctx = await requireRole(["Adm", "Financeiro"])
   const supabase = await getSupabaseServerClient()
 
-  // Validar dados
   if (!input.numero_boleto?.trim()) {
     return { success: false, error: "Número do boleto é obrigatório" }
   }
@@ -63,12 +68,21 @@ export async function criarBoleto(input: CreateBoletoInput) {
     return { success: false, error: "Conta é obrigatória" }
   }
 
-  // Verificar se o boleto já existe
-  const { data: existente } = await supabase
-    .from("boletos")
-    .select("id")
-    .eq("numero_boleto", input.numero_boleto)
-    .single()
+  if (input.centro_custo_id) {
+    const { data: centroCusto } = await scopeToTenant(
+      supabase.from("centros_custo").select("id").eq("id", input.centro_custo_id),
+      ctx,
+    ).maybeSingle()
+
+    if (!centroCusto) {
+      return { success: false, error: "Centro de custo não encontrado" }
+    }
+  }
+
+  const { data: existente } = await scopeToTenant(
+    supabase.from("boletos").select("id").eq("numero_boleto", input.numero_boleto),
+    ctx,
+  ).maybeSingle()
 
   if (existente) {
     return { success: false, error: "Este número de boleto já existe" }
@@ -83,13 +97,14 @@ export async function criarBoleto(input: CreateBoletoInput) {
       conta: input.conta.trim(),
       tipo: input.tipo,
       centro_custo_id: input.centro_custo_id || null,
-      ativo: true
+      ativo: true,
+      tenant_id: ctx.tenantId,
     })
     .select(
       `
         *,
         centro_custo:centros_custo(id, nome)
-      `
+      `,
     )
     .single()
 
@@ -103,31 +118,50 @@ export async function criarBoleto(input: CreateBoletoInput) {
 }
 
 export async function atualizarBoleto(id: string, input: UpdateBoletoInput) {
+  const ctx = await requireRole(["Adm", "Financeiro"])
   const supabase = await getSupabaseServerClient()
 
-  const { data: boleto, error } = await supabase
-    .from("boletos")
-    .update({
-      ...(input.numero_boleto && { numero_boleto: input.numero_boleto.trim() }),
-      ...(input.banco && { banco: input.banco.trim() }),
-      ...(input.agencia && { agencia: input.agencia.trim() }),
-      ...(input.conta && { conta: input.conta.trim() }),
-      ...(input.tipo && { tipo: input.tipo }),
-      ...(input.centro_custo_id !== undefined && { centro_custo_id: input.centro_custo_id }),
-      ...(input.ativo !== undefined && { ativo: input.ativo })
-    })
-    .eq("id", id)
+  if (input.centro_custo_id) {
+    const { data: centroCusto } = await scopeToTenant(
+      supabase.from("centros_custo").select("id").eq("id", input.centro_custo_id),
+      ctx,
+    ).maybeSingle()
+
+    if (!centroCusto) {
+      return { success: false, error: "Centro de custo não encontrado" }
+    }
+  }
+
+  const { data: boleto, error } = await scopeToTenant(
+    supabase
+      .from("boletos")
+      .update({
+        ...(input.numero_boleto && { numero_boleto: input.numero_boleto.trim() }),
+        ...(input.banco && { banco: input.banco.trim() }),
+        ...(input.agencia && { agencia: input.agencia.trim() }),
+        ...(input.conta && { conta: input.conta.trim() }),
+        ...(input.tipo && { tipo: input.tipo }),
+        ...(input.centro_custo_id !== undefined && { centro_custo_id: input.centro_custo_id }),
+        ...(input.ativo !== undefined && { ativo: input.ativo }),
+      })
+      .eq("id", id),
+    ctx,
+  )
     .select(
       `
         *,
         centro_custo:centros_custo(id, nome)
-      `
+      `,
     )
-    .single()
+    .maybeSingle()
 
   if (error) {
     console.error("[v0] Erro ao atualizar boleto:", error)
     return { success: false, error: error.message }
+  }
+
+  if (!boleto) {
+    return { success: false, error: "Boleto não encontrado" }
   }
 
   revalidatePath("/cadastros")
@@ -135,16 +169,20 @@ export async function atualizarBoleto(id: string, input: UpdateBoletoInput) {
 }
 
 export async function deletarBoleto(id: string) {
+  const ctx = await requireRole(["Adm", "Financeiro"])
   const supabase = await getSupabaseServerClient()
 
-  const { error } = await supabase
-    .from("boletos")
-    .delete()
-    .eq("id", id)
+  const { data, error } = await scopeToTenant(supabase.from("boletos").delete().eq("id", id), ctx)
+    .select("id")
+    .maybeSingle()
 
   if (error) {
     console.error("[v0] Erro ao deletar boleto:", error)
     return { success: false, error: error.message }
+  }
+
+  if (!data) {
+    return { success: false, error: "Boleto não encontrado" }
   }
 
   revalidatePath("/cadastros")
