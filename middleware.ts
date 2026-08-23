@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server"
+import { verifyAndParse } from "./lib/session-crypto"
 
 export async function middleware(request: NextRequest) {
   const response = NextResponse.next({
@@ -10,7 +11,7 @@ export async function middleware(request: NextRequest) {
   response.headers.set("x-pathname", request.nextUrl.pathname)
 
   const sessionCookie = request.cookies.get("fluxopay_session")
-  const session = sessionCookie ? JSON.parse(sessionCookie.value) : null
+  const session = await verifyAndParse<{ tipoAcesso: string }>(sessionCookie?.value)
 
   const publicRoutes = ["/login", "/setup", "/faq", "/termos", "/privacidade", "/esqueci-senha", "/redefinir-senha"]
   const isPublicRoute = publicRoutes.some((route) => request.nextUrl.pathname.startsWith(route))

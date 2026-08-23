@@ -110,6 +110,10 @@ export async function login(email: string, password: string) {
     tipoAcesso: colaborador.tipo_acesso,
     cnpj: colaborador.cnpj,
     salario: colaborador.salario,
+    // Colunas ainda não existem antes da migração 060 rodar — undefined vira
+    // um estado seguro (ninguém é super admin, ninguém tem tenant) até lá.
+    tenantId: colaborador.tenant_id ?? null,
+    isSuperAdmin: colaborador.is_super_admin ?? false,
   })
 
   revalidatePath("/", "layout")
