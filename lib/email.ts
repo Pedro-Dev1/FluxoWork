@@ -1,6 +1,16 @@
 import { Resend } from "resend"
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+// Instanciado sob demanda, nunca no carregamento do módulo: o construtor do
+// Resend lança exceção se a chave estiver ausente, e isso derrubaria o build
+// (ou qualquer rota que importe este arquivo) em qualquer ambiente sem a
+// variável configurada — inclusive antes da primeira configuração na Vercel.
+function getResendClient(): Resend | null {
+  if (!process.env.RESEND_API_KEY) {
+    console.error("[v0] RESEND_API_KEY não configurada — e-mail não enviado.")
+    return null
+  }
+  return new Resend(process.env.RESEND_API_KEY)
+}
 
 const FROM = process.env.RESEND_FROM_EMAIL || "FluxoPay <notificacoes@simpleqia.com>"
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://fluxopay.connectvending.simpleqia.com"
@@ -66,6 +76,9 @@ export async function enviarEmailNotaFiscalPendente(params: {
     <p style="margin:0 0 12px 0;">Seu pedido de pagamento no valor de <strong style="color:#1A1F36;">${valorFormatado}</strong> foi aprovado pelo financeiro. Para que o pagamento seja processado, você precisa anexar a nota fiscal em até ${params.prazoDias} dias.</p>
     <p style="margin:0;">Acesse o sistema e anexe sua nota fiscal o quanto antes.</p>
   `
+  const resend = getResendClient()
+  if (!resend) return
+
   try {
     await resend.emails.send({
       from: FROM,
@@ -92,6 +105,9 @@ export async function enviarEmailRedefinicaoSenha(params: { destinatario: string
     <p style="margin:0 0 12px 0;">Recebemos uma solicitação para redefinir a senha da sua conta no FluxoPay. Clique no botão abaixo para criar uma nova senha.</p>
     <p style="margin:0;">Se você não solicitou essa alteração, pode ignorar este e-mail — sua senha atual continua válida. Este link expira em 1 hora.</p>
   `
+  const resend = getResendClient()
+  if (!resend) return
+
   try {
     await resend.emails.send({
       from: FROM,
