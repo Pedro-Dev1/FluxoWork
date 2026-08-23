@@ -126,6 +126,12 @@ export function AprovacoesList({ pedidos, tipoAcesso }: AprovacoesListProps) {
                   <p className="font-medium tabular-nums">{formatValue(pedido.valor_plantao || 0)}</p>
                 </div>
               )}
+              {(pedido.comissao || 0) > 0 && (
+                <div>
+                  <p className="text-xs text-text-tertiary">Comissão</p>
+                  <p className="font-medium tabular-nums">{formatValue(pedido.comissao || 0)}</p>
+                </div>
+              )}
               {(pedido.valor_km || 0) > 0 && (
                 <div>
                   <p className="text-xs text-text-tertiary">Quilometragem</p>
@@ -162,22 +168,28 @@ export function AprovacoesList({ pedidos, tipoAcesso }: AprovacoesListProps) {
           </p>
         )}
 
-        {pedido.motivo_horas_extras && (
+        {(pedido.horas_extras || 0) > 0 && (
           <div className="mb-2">
             <p className="text-xs text-text-tertiary">Motivo das horas extras</p>
-            <p className="text-sm text-text-secondary">{pedido.motivo_horas_extras}</p>
+            <p className="text-sm text-text-secondary">{pedido.motivo_horas_extras || "Não informado"}</p>
           </div>
         )}
-        {pedido.motivo_plantao && (
+        {(pedido.valor_plantao || 0) > 0 && (
           <div className="mb-2">
             <p className="text-xs text-text-tertiary">Motivo do plantão</p>
-            <p className="text-sm text-text-secondary">{pedido.motivo_plantao}</p>
+            <p className="text-sm text-text-secondary">{pedido.motivo_plantao || "Não informado"}</p>
           </div>
         )}
-        {pedido.motivo_desconto && (
+        {(pedido.comissao || 0) > 0 && (
+          <div className="mb-2">
+            <p className="text-xs text-text-tertiary">Motivo da comissão</p>
+            <p className="text-sm text-text-secondary">{pedido.motivo_comissao || "Não informado"}</p>
+          </div>
+        )}
+        {(pedido.valor_desconto || 0) > 0 && (
           <div className="mb-2">
             <p className="text-xs text-text-tertiary">Motivo do desconto</p>
-            <p className="text-sm text-text-secondary">{pedido.motivo_desconto}</p>
+            <p className="text-sm text-text-secondary">{pedido.motivo_desconto || "Não informado"}</p>
           </div>
         )}
         {pedido.observacao_gerente && (

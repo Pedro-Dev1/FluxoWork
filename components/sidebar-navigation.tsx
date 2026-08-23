@@ -45,7 +45,7 @@ interface NavGroup {
 export function SidebarNavigation({ tipoAcesso }: SidebarNavigationProps) {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [pendencias, setPendencias] = useState({ aprovacoes: 0, painelFinanceiro: 0, correcoes: 0 })
+  const [pendencias, setPendencias] = useState({ aprovacoes: 0, painelFinanceiro: 0, correcoes: 0, acompanhamento: 0 })
 
   useEffect(() => {
     const fetchPendencias = async () => {
@@ -88,7 +88,7 @@ export function SidebarNavigation({ tipoAcesso }: SidebarNavigationProps) {
           title: "Equipe",
           items: [
             { href: "/supervisor/notas-equipe", label: "Notas da Equipe", icon: Users },
-            { href: "/acompanhamento", label: "Acompanhamento", icon: AlertCircle },
+            { href: "/acompanhamento", label: "Acompanhamento", icon: AlertCircle, badge: pendencias.acompanhamento },
           ],
         },
         { items: [{ href: "/redefinir-senha", label: "Redefinir Senha", icon: Lock }] },
@@ -103,7 +103,7 @@ export function SidebarNavigation({ tipoAcesso }: SidebarNavigationProps) {
           { href: "/pedidos", label: "Criar Pedido", icon: Receipt, roles: ["Adm", "Gerente"] },
           { href: "/historico", label: "Meus Pedidos", icon: FileText, roles: ["Gerente"], badge: pendencias.correcoes },
           { href: "/aprovacoes", label: "Aprovações", icon: CheckSquare, roles: ["Adm", "Gerente", "Financeiro"], badge: pendencias.aprovacoes },
-          { href: "/acompanhamento", label: "Acompanhamento", icon: AlertCircle, roles: ["Adm", "Gerente", "Financeiro"], badge: pendencias.correcoes },
+          { href: "/acompanhamento", label: "Acompanhamento", icon: AlertCircle, roles: ["Adm", "Gerente", "Financeiro"], badge: pendencias.acompanhamento },
           { href: "/meus-pagamentos", label: "Meus Pagamentos", icon: Receipt, roles: ["Gerente", "Financeiro"] },
         ],
       },
