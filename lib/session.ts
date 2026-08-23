@@ -29,14 +29,13 @@ export async function getSession(): Promise<SessionData | null> {
   const cookieStore = await cookies()
   const sessionCookie = cookieStore.get("fluxopay_session")
 
-  const session = await verifyAndParse<SessionData>(sessionCookie?.value)
-  if (!session) {
-    // Cookie ausente, malformado ou com assinatura inválida — trata como
-    // deslogado e limpa o cookie em vez de deixá-lo pendurado.
-    if (sessionCookie) cookieStore.delete("fluxopay_session")
-    return null
-  }
-  return session
+  // getSession() é chamada também de Server Components (ex.: app/layout.tsx),
+  // e o Next.js só permite escrever/apagar cookies em Server Actions, Route
+  // Handlers ou middleware — nunca durante a renderização de um componente.
+  // Por isso não apagamos o cookie inválido aqui; só tratamos como deslogado.
+  // O middleware já bloqueia qualquer acesso com sessão inválida de qualquer
+  // forma, e o cookie é substituído no próximo login.
+  return await verifyAndParse<SessionData>(sessionCookie?.value)
 }
 
 export async function destroySession() {
