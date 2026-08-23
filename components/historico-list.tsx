@@ -7,6 +7,7 @@ import { StatusBadge } from "@/components/ui/status-badge"
 import { EmptyState } from "@/components/ui/empty-state"
 import { ChevronDown, ChevronUp } from "lucide-react"
 import { useMaskedCurrency } from "@/components/currency-display"
+import { PedidoComposicao } from "./pedido-composicao"
 
 interface HistoricoListProps {
   pedidos: PedidoPagamento[]
@@ -35,7 +36,6 @@ export function HistoricoList({ pedidos }: HistoricoListProps) {
         <TableBody>
           {pedidos.map((pedido) => {
             const colaboradorNome = pedido.colaborador?.nome_completo || "N/A"
-            const colaboradorSalario = pedido.salario_base ?? pedido.colaborador?.salario ?? 0
             const isReembolsoKm = pedido.tipo_pedido === "reembolso_km"
             const isExpanded = expandedId === pedido.id
 
@@ -73,48 +73,15 @@ export function HistoricoList({ pedidos }: HistoricoListProps) {
                 {isExpanded && (
                   <TableRow className="border-border">
                     <TableCell colSpan={5} className="bg-surface px-4 py-3">
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm mb-3">
-                        {isReembolsoKm ? (
-                          <div>
-                            <p className="text-xs text-text-tertiary">Quilometragem</p>
-                            <p className="font-medium tabular-nums">{formatValue(pedido.valor_km || 0)}</p>
-                          </div>
-                        ) : (
-                          <>
-                            <div>
-                              <p className="text-xs text-text-tertiary">Salário base</p>
-                              <p className="font-medium tabular-nums">{formatValue(colaboradorSalario)}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-text-tertiary">Horas extras</p>
-                              <p className="font-medium tabular-nums">{formatValue(pedido.horas_extras || 0)}</p>
-                            </div>
-                            {(pedido.valor_km || 0) > 0 && (
-                              <div>
-                                <p className="text-xs text-text-tertiary">Quilometragem</p>
-                                <p className="font-medium tabular-nums">{formatValue(pedido.valor_km || 0)}</p>
-                              </div>
-                            )}
-                            {(pedido.valor_desconto || 0) > 0 && (
-                              <div>
-                                <p className="text-xs text-text-tertiary">Desconto</p>
-                                <p className="font-medium tabular-nums text-danger">-{formatValue(pedido.valor_desconto || 0)}</p>
-                                {pedido.motivo_desconto && (
-                                  <p className="text-xs text-text-tertiary mt-0.5">{pedido.motivo_desconto}</p>
-                                )}
-                              </div>
-                            )}
-                          </>
-                        )}
-                      </div>
+                      <PedidoComposicao pedido={pedido} />
                       {pedido.observacao_gerente && (
-                        <div className="mb-2">
+                        <div className="mt-3 mb-2">
                           <p className="text-xs text-text-tertiary">Observação do gerente</p>
                           <p className="text-sm text-text-secondary">{pedido.observacao_gerente}</p>
                         </div>
                       )}
                       {pedido.observacao_financeiro && (
-                        <div>
+                        <div className="mt-3">
                           <p className="text-xs text-text-tertiary">Observação do financeiro</p>
                           <p className="text-sm text-text-secondary">{pedido.observacao_financeiro}</p>
                         </div>

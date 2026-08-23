@@ -7,7 +7,9 @@ export interface PedidoPagamento {
   horas_extras_100?: number
   motivo_horas_extras?: string
   valor_km: number
+  motivo_km?: string
   conducao: number
+  motivo_conducao?: string
   valor_plantao: number
   motivo_plantao?: string
   comissao?: number
@@ -99,7 +101,9 @@ export interface NovoPedido {
   horas_extras_100: number
   motivo_horas_extras?: string
   valor_km: number
+  motivo_km?: string
   conducao: number
+  motivo_conducao?: string
   valor_plantao: number
   motivo_plantao?: string
   comissao: number

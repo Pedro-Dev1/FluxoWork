@@ -279,6 +279,8 @@ export function PedidoForm({ colaboradores, tipoAcesso }: PedidoFormProps) {
     const motivosDesconto: string[] = []
     const motivosPlantao: string[] = []
     const motivosComissao: string[] = []
+    const motivosConducao: string[] = []
+    const motivosKm: string[] = []
 
     for (const item of items) {
       const val = calcularValorItem(item)
@@ -301,8 +303,14 @@ export function PedidoForm({ colaboradores, tipoAcesso }: PedidoFormProps) {
           valorPlantao += item.valor
           motivosPlantao.push(item.motivo)
           break
-        case "conducao": valorConducao += item.valor; break
-        case "reembolso_km": valorKm += item.valor; break
+        case "conducao":
+          valorConducao += item.valor
+          motivosConducao.push(item.motivo)
+          break
+        case "reembolso_km":
+          valorKm += item.valor
+          motivosKm.push(item.motivo)
+          break
         case "comissao":
           valorComissao += item.valor
           motivosComissao.push(item.motivo)
@@ -329,7 +337,9 @@ export function PedidoForm({ colaboradores, tipoAcesso }: PedidoFormProps) {
       horas_extras_100: he100Qty,
       motivo_horas_extras: motivos.join(" | ") || undefined,
       valor_km: valorKm,
+      motivo_km: motivosKm.join(" | ") || undefined,
       conducao: valorConducao,
+      motivo_conducao: motivosConducao.join(" | ") || undefined,
       valor_plantao: valorPlantao,
       motivo_plantao: motivosPlantao.join(" | ") || undefined,
       comissao: valorComissao,

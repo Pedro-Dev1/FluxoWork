@@ -11,6 +11,7 @@ import type { Equipe } from "@/types/equipe"
 import { listarEquipes } from "@/app/actions/equipes"
 import { useMaskedCurrency } from "@/components/currency-display"
 import { SimplePager } from "@/components/ui/simple-pager"
+import { PedidoComposicao } from "./pedido-composicao"
 
 interface PedidosSemNotaListProps {
   pedidos: PedidoPagamento[]
@@ -192,36 +193,8 @@ export function PedidosSemNotaList({ pedidos }: PedidosSemNotaListProps) {
                       {isExpanded && (
                         <TableRow className="border-border">
                           <TableCell colSpan={6} className="bg-surface px-4 py-3">
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-                              <div>
-                                <p className="text-xs text-text-tertiary">Salário</p>
-                                <p className="font-medium tabular-nums">{formatValue(salarioBase)}</p>
-                              </div>
-                              <div>
-                                <p className="text-xs text-text-tertiary">Horas extras</p>
-                                <p className="font-medium tabular-nums">{formatValue(pedido.horas_extras || 0)}</p>
-                              </div>
-                              {(pedido.valor_plantao || 0) > 0 && (
-                                <div>
-                                  <p className="text-xs text-text-tertiary">Plantão</p>
-                                  <p className="font-medium tabular-nums">{formatValue(pedido.valor_plantao || 0)}</p>
-                                </div>
-                              )}
-                              {(pedido.conducao || 0) > 0 && (
-                                <div>
-                                  <p className="text-xs text-text-tertiary">Condução</p>
-                                  <p className="font-medium tabular-nums">{formatValue(pedido.conducao || 0)}</p>
-                                </div>
-                              )}
-                              {(pedido.valor_desconto || 0) > 0 && (
-                                <div>
-                                  <p className="text-xs text-text-tertiary">Desconto</p>
-                                  <p className="font-medium tabular-nums text-danger">-{formatValue(pedido.valor_desconto || 0)}</p>
-                                  {pedido.motivo_desconto && (
-                                    <p className="text-xs text-text-tertiary mt-0.5">{pedido.motivo_desconto}</p>
-                                  )}
-                                </div>
-                              )}
+                            <PedidoComposicao pedido={pedido} />
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm mt-3">
                               {Math.abs(valorNF - pedido.valor_total) > 0.01 && (
                                 <div>
                                   <p className="text-xs text-text-tertiary">Total do pedido</p>

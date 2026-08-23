@@ -13,6 +13,7 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { Search, X, ChevronDown, ChevronUp, Download, FileText } from "lucide-react"
 import { SimplePager } from "@/components/ui/simple-pager"
 import { useMaskedCurrency } from "@/components/currency-display"
+import { PedidoComposicao } from "./pedido-composicao"
 
 interface HistoricoCompletoListProps {
   pedidos: PedidoPagamento[]
@@ -224,53 +225,16 @@ export function HistoricoCompletoList({ pedidos, equipes }: HistoricoCompletoLis
                         {isExpanded && (
                           <TableRow className="border-border">
                             <TableCell colSpan={6} className="bg-surface px-4 py-3">
-                              {pedido.tipo_pedido !== "reembolso_km" && (
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm mb-3">
-                                  <div>
-                                    <p className="text-xs text-text-tertiary">Salário base</p>
-                                    <p className="font-medium tabular-nums">
-                                      {formatValue(pedido.salario_base ?? pedido.colaborador?.salario ?? 0)}
-                                    </p>
-                                  </div>
-                                  <div>
-                                    <p className="text-xs text-text-tertiary">Horas extras</p>
-                                    <p className="font-medium tabular-nums">{formatValue(pedido.horas_extras || 0)}</p>
-                                  </div>
-                                  {(pedido.valor_km || 0) > 0 && (
-                                    <div>
-                                      <p className="text-xs text-text-tertiary">Quilometragem</p>
-                                      <p className="font-medium tabular-nums">{formatValue(pedido.valor_km || 0)}</p>
-                                    </div>
-                                  )}
-                                  {(pedido.conducao || 0) > 0 && (
-                                    <div>
-                                      <p className="text-xs text-text-tertiary">Condução</p>
-                                      <p className="font-medium tabular-nums">{formatValue(pedido.conducao || 0)}</p>
-                                    </div>
-                                  )}
-                                  {(pedido.valor_plantao || 0) > 0 && (
-                                    <div>
-                                      <p className="text-xs text-text-tertiary">Plantão</p>
-                                      <p className="font-medium tabular-nums">{formatValue(pedido.valor_plantao || 0)}</p>
-                                    </div>
-                                  )}
-                                  {(pedido.valor_desconto || 0) > 0 && (
-                                    <div>
-                                      <p className="text-xs text-text-tertiary">Desconto</p>
-                                      <p className="font-medium tabular-nums text-danger">-{formatValue(pedido.valor_desconto || 0)}</p>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
+                              <PedidoComposicao pedido={pedido} />
 
                               {pedido.observacao_gerente && (
-                                <div className="mb-2">
+                                <div className="mt-3 mb-2">
                                   <p className="text-xs text-text-tertiary">Observação do gerente</p>
                                   <p className="text-sm text-text-secondary">{pedido.observacao_gerente}</p>
                                 </div>
                               )}
                               {pedido.observacao_financeiro && (
-                                <div className="mb-2">
+                                <div className="mt-3 mb-2">
                                   <p className="text-xs text-text-tertiary">Observação do financeiro</p>
                                   <p className="text-sm text-text-secondary">{pedido.observacao_financeiro}</p>
                                 </div>

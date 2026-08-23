@@ -17,6 +17,7 @@ import { useMaskedCurrency } from "@/components/currency-display"
 import { useSystemStatus } from "./system-status-provider"
 import { SystemSuspendedDialog } from "./system-suspended-dialog"
 import { toast } from "sonner"
+import { PedidoComposicao } from "./pedido-composicao"
 
 interface AprovacoesListProps {
   pedidos: PedidoPagamento[]
@@ -101,55 +102,12 @@ export function AprovacoesList({ pedidos, tipoAcesso }: AprovacoesListProps) {
     dialogAlvo?.acao === "aprovar" ? "Aprovar pedido" : dialogAlvo?.acao === "corrigir" ? "Solicitar correção" : "Recusar pedido"
 
   const DetalhesPedido = ({ pedido }: { pedido: PedidoPagamento }) => {
-    const { isReembolsoKm, salarioBase } = composicaoDe(pedido)
     return (
       <div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm mb-3">
-          {isReembolsoKm ? (
-            <div>
-              <p className="text-xs text-text-tertiary">Quilometragem</p>
-              <p className="font-medium tabular-nums">{formatValue(pedido.valor_km || 0)}</p>
-            </div>
-          ) : (
-            <>
-              <div>
-                <p className="text-xs text-text-tertiary">Salário base</p>
-                <p className="font-medium tabular-nums">{formatValue(salarioBase)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-text-tertiary">Horas extras</p>
-                <p className="font-medium tabular-nums">{formatValue(pedido.horas_extras || 0)}</p>
-              </div>
-              {(pedido.valor_plantao || 0) > 0 && (
-                <div>
-                  <p className="text-xs text-text-tertiary">Plantão</p>
-                  <p className="font-medium tabular-nums">{formatValue(pedido.valor_plantao || 0)}</p>
-                </div>
-              )}
-              {(pedido.comissao || 0) > 0 && (
-                <div>
-                  <p className="text-xs text-text-tertiary">Comissão</p>
-                  <p className="font-medium tabular-nums">{formatValue(pedido.comissao || 0)}</p>
-                </div>
-              )}
-              {(pedido.valor_km || 0) > 0 && (
-                <div>
-                  <p className="text-xs text-text-tertiary">Quilometragem</p>
-                  <p className="font-medium tabular-nums">{formatValue(pedido.valor_km || 0)}</p>
-                </div>
-              )}
-              {(pedido.valor_desconto || 0) > 0 && (
-                <div>
-                  <p className="text-xs text-text-tertiary">Desconto</p>
-                  <p className="font-medium tabular-nums text-danger">-{formatValue(pedido.valor_desconto || 0)}</p>
-                </div>
-              )}
-            </>
-          )}
-        </div>
+        <PedidoComposicao pedido={pedido} />
 
         {pedido.criado_por && (
-          <p className="text-xs text-text-tertiary flex items-center gap-1 mb-2">
+          <p className="text-xs text-text-tertiary flex items-center gap-1 mt-3 mb-2">
             <User className="w-3 h-3" />
             Solicitado por {pedido.criado_por.nome_completo}
           </p>
@@ -168,30 +126,6 @@ export function AprovacoesList({ pedidos, tipoAcesso }: AprovacoesListProps) {
           </p>
         )}
 
-        {(pedido.horas_extras || 0) > 0 && (
-          <div className="mb-2">
-            <p className="text-xs text-text-tertiary">Motivo das horas extras</p>
-            <p className="text-sm text-text-secondary">{pedido.motivo_horas_extras || "Não informado"}</p>
-          </div>
-        )}
-        {(pedido.valor_plantao || 0) > 0 && (
-          <div className="mb-2">
-            <p className="text-xs text-text-tertiary">Motivo do plantão</p>
-            <p className="text-sm text-text-secondary">{pedido.motivo_plantao || "Não informado"}</p>
-          </div>
-        )}
-        {(pedido.comissao || 0) > 0 && (
-          <div className="mb-2">
-            <p className="text-xs text-text-tertiary">Motivo da comissão</p>
-            <p className="text-sm text-text-secondary">{pedido.motivo_comissao || "Não informado"}</p>
-          </div>
-        )}
-        {(pedido.valor_desconto || 0) > 0 && (
-          <div className="mb-2">
-            <p className="text-xs text-text-tertiary">Motivo do desconto</p>
-            <p className="text-sm text-text-secondary">{pedido.motivo_desconto || "Não informado"}</p>
-          </div>
-        )}
         {pedido.observacao_gerente && (
           <div className="mb-2">
             <p className="text-xs text-text-tertiary">Observação do gerente</p>

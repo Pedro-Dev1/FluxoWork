@@ -26,6 +26,7 @@ import { listarEquipes } from "@/app/actions/equipes"
 import { aprovarNotaFiscal, recusarNotaFiscal } from "@/app/actions/pedidos"
 import type { Equipe } from "@/types/equipe"
 import { toast } from "sonner"
+import { PedidoComposicao } from "./pedido-composicao"
 import {
   Dialog,
   DialogContent,
@@ -439,76 +440,7 @@ export function NotasEnviadasList({ pedidos, canApprove = true }: NotasEnviadasL
 
               {isExpanded && (
                 <div className="mt-3 pt-3 border-t space-y-3">
-                  {isReembolsoKm ? (
-                    <div className="bg-muted/30 p-2 rounded">
-                      <div>
-                        <span className="text-xs text-muted-foreground block">Quilometragem (Reembolso)</span>
-                        <span className="font-semibold text-sm">
-                          R$ {(pedido.valor_km || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs bg-muted/30 p-2 rounded">
-                      <div>
-                        <span className="text-muted-foreground block">Salário</span>
-                        <span className="font-semibold">
-                          R$ {(pedido.salario_base ?? pedido.colaborador?.salario ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground block">Horas Extras</span>
-                        <span className="font-semibold">
-                          R$ {(pedido.horas_extras || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground block">Condução</span>
-                        <span className="font-semibold">
-                          R$ {(pedido.conducao || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground block">Quilometragem</span>
-                        <span className="font-semibold">
-                          R$ {(pedido.valor_km || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground block">Plantão</span>
-                        <span className="font-semibold">
-                          R$ {(pedido.valor_plantao || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {pedido.horas_extras > 0 && pedido.motivo_horas_extras && (
-                    <div className="bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800 rounded p-2">
-                      <span className="text-xs text-muted-foreground block">Motivo das Horas Extras</span>
-                      <span className="text-xs text-orange-800 dark:text-orange-200 block mt-1">
-                        {pedido.motivo_horas_extras}
-                      </span>
-                    </div>
-                  )}
-
-                  {(() => {
-                    const descontoAplicado = pedido.valor_desconto || 0
-
-                    return descontoAplicado > 0 ? (
-                      <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded p-2">
-                        <span className="text-xs text-muted-foreground block">Desconto Aplicado</span>
-                        <span className="font-semibold text-red-600 text-sm">
-                          -R$ {descontoAplicado.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                        </span>
-                        {pedido.motivo_desconto && (
-                          <span className="text-xs text-muted-foreground block mt-1">
-                            Motivo: {pedido.motivo_desconto}
-                          </span>
-                        )}
-                      </div>
-                    ) : null
-                  })()}
+                  <PedidoComposicao pedido={pedido} />
 
                   <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded p-2">
                     <div className="text-xs text-muted-foreground mb-1">Resumo</div>

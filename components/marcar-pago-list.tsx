@@ -33,6 +33,7 @@ import { useSystemStatus } from "./system-status-provider"
 import { SystemSuspendedDialog } from "./system-suspended-dialog"
 import { SimplePager } from "@/components/ui/simple-pager"
 import { toast } from "sonner"
+import { PedidoComposicao } from "./pedido-composicao"
 
 interface MarcarPagoListProps {
   pedidos: PedidoPagamento[]
@@ -235,38 +236,7 @@ export function MarcarPagoList({ pedidos }: MarcarPagoListProps) {
                 <p className="text-sm font-medium text-foreground">{confirmAlvo.pedido.colaborador?.nome_completo || "Colaborador"}</p>
                 <p className="text-lg font-semibold tabular-nums text-foreground">{formatValue(confirmAlvo.pedido.valor_total)}</p>
               </div>
-              {(() => {
-                const { isReembolsoKm, valorNF } = composicaoDe(confirmAlvo.pedido)
-                return (
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    {isReembolsoKm ? (
-                      <div>
-                        <p className="text-xs text-text-tertiary">Quilometragem</p>
-                        <p className="font-medium tabular-nums">{formatValue(confirmAlvo.pedido.valor_km || 0)}</p>
-                      </div>
-                    ) : (
-                      <>
-                        <div>
-                          <p className="text-xs text-text-tertiary">Salário</p>
-                          <p className="font-medium tabular-nums">
-                            {formatValue(confirmAlvo.pedido.salario_base ?? confirmAlvo.pedido.colaborador?.salario ?? 0)}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-text-tertiary">Horas extras</p>
-                          <p className="font-medium tabular-nums">{formatValue(confirmAlvo.pedido.horas_extras || 0)}</p>
-                        </div>
-                        {(confirmAlvo.pedido.valor_desconto || 0) > 0 && (
-                          <div>
-                            <p className="text-xs text-text-tertiary">Desconto</p>
-                            <p className="font-medium tabular-nums text-danger">-{formatValue(confirmAlvo.pedido.valor_desconto || 0)}</p>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                )
-              })()}
+              <PedidoComposicao pedido={confirmAlvo.pedido} />
               <p className="text-sm text-text-secondary">
                 {confirmAlvo.tipo === "aprovar-nota"
                   ? "Confirma que a nota fiscal deste pedido foi recebida e conferida?"
@@ -437,66 +407,13 @@ export function MarcarPagoList({ pedidos }: MarcarPagoListProps) {
                   {isExpanded && (
                     <TableRow className="border-border">
                       <TableCell colSpan={6} className="bg-surface px-4 py-3">
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-                          {isReembolsoKm ? (
+                        <PedidoComposicao pedido={pedido} />
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm mt-3">
+                          {!isReembolsoKm && Math.abs(valorNF - pedido.valor_total) > 0.01 && (
                             <div>
-                              <p className="text-xs text-text-tertiary">Quilometragem</p>
-                              <p className="font-medium tabular-nums">{formatValue(pedido.valor_km || 0)}</p>
+                              <p className="text-xs text-text-tertiary">Valor da nota fiscal</p>
+                              <p className="font-medium tabular-nums">{formatValue(valorNF)}</p>
                             </div>
-                          ) : (
-                            <>
-                              <div>
-                                <p className="text-xs text-text-tertiary">Salário</p>
-                                <p className="font-medium tabular-nums">
-                                  {formatValue(pedido.salario_base ?? pedido.colaborador?.salario ?? 0)}
-                                </p>
-                              </div>
-                              <div>
-                                <p className="text-xs text-text-tertiary">Horas extras</p>
-                                <p className="font-medium tabular-nums">{formatValue(pedido.horas_extras || 0)}</p>
-                              </div>
-                              {(pedido.valor_plantao || 0) > 0 && (
-                                <div>
-                                  <p className="text-xs text-text-tertiary">Plantão</p>
-                                  <p className="font-medium tabular-nums">{formatValue(pedido.valor_plantao || 0)}</p>
-                                </div>
-                              )}
-                              {(pedido.comissao || 0) > 0 && (
-                                <div>
-                                  <p className="text-xs text-text-tertiary">Comissão</p>
-                                  <p className="font-medium tabular-nums">{formatValue(pedido.comissao || 0)}</p>
-                                </div>
-                              )}
-                              {(pedido.conducao || 0) > 0 && (
-                                <div>
-                                  <p className="text-xs text-text-tertiary">Condução (fora da NF)</p>
-                                  <p className="font-medium tabular-nums">{formatValue(pedido.conducao || 0)}</p>
-                                </div>
-                              )}
-                              {(pedido.valor_km || 0) > 0 && (
-                                <div>
-                                  <p className="text-xs text-text-tertiary">Quilometragem (fora da NF)</p>
-                                  <p className="font-medium tabular-nums">{formatValue(pedido.valor_km || 0)}</p>
-                                </div>
-                              )}
-                              {(pedido.valor_desconto || 0) > 0 && (
-                                <div>
-                                  <p className="text-xs text-text-tertiary">Desconto</p>
-                                  <p className="font-medium tabular-nums text-danger">
-                                    -{formatValue(pedido.valor_desconto || 0)}
-                                  </p>
-                                  {pedido.motivo_desconto && (
-                                    <p className="text-xs text-text-tertiary mt-0.5">{pedido.motivo_desconto}</p>
-                                  )}
-                                </div>
-                              )}
-                              {Math.abs(valorNF - pedido.valor_total) > 0.01 && (
-                                <div>
-                                  <p className="text-xs text-text-tertiary">Valor da nota fiscal</p>
-                                  <p className="font-medium tabular-nums">{formatValue(valorNF)}</p>
-                                </div>
-                              )}
-                            </>
                           )}
                           {pdfUrl && (
                             <div>
