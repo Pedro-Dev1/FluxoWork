@@ -9,6 +9,9 @@ const STATUS_MAP: Record<StatusPedido, { label: string; className: string }> = {
   correcao: { label: "Correção solicitada", className: "bg-warning-subtle text-warning" },
   pago: { label: "Pago", className: "bg-success-subtle text-success" },
   nota_recebida: { label: "Nota recebida", className: "bg-neutral-state-subtle text-neutral-state" },
+  aguardando_prorrogacao: { label: "Prorrogação solicitada", className: "bg-warning-subtle text-warning" },
+  prorrogacao_negada: { label: "Prorrogação negada", className: "bg-danger-subtle text-danger" },
+  expirado: { label: "Expirado", className: "bg-danger-subtle text-danger" },
 }
 
 export function StatusBadge({ status, className }: { status: StatusPedido | string; className?: string }) {

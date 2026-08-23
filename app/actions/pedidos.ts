@@ -1401,6 +1401,28 @@ export async function marcarPedidoPago(pedidoId: string) {
   return { success: true }
 }
 
+const DIAS_PARA_EXPIRAR_SEM_NOTA = 15
+
+async function expirarPedidosSemNotaAntigos(supabase: any) {
+  const cutoff = new Date()
+  cutoff.setDate(cutoff.getDate() - DIAS_PARA_EXPIRAR_SEM_NOTA)
+
+  const { data: candidatos } = await supabase
+    .from("pedidos_pagamento")
+    .select("id, tipo_pedido")
+    .in("status", ["pendente_financeiro", "aprovado"])
+    .is("nota_fiscal_url", null)
+    .lt("created_at", cutoff.toISOString())
+
+  const idsExpirar = (candidatos || [])
+    .filter((p: any) => p.tipo_pedido !== "reembolso_km")
+    .map((p: any) => p.id)
+
+  if (idsExpirar.length > 0) {
+    await supabase.from("pedidos_pagamento").update({ status: "expirado" }).in("id", idsExpirar)
+  }
+}
+
 export async function listarPedidosSemNota(filtros?: {
   dataInicio?: string
   dataFim?: string
@@ -1412,6 +1434,8 @@ export async function listarPedidosSemNota(filtros?: {
 
   if (!session) throw new Error("Usuário não autenticado")
   if (!["Financeiro", "Adm"].includes(session.tipoAcesso)) throw new Error("Sem permissão")
+
+  await expirarPedidosSemNotaAntigos(supabase)
 
   let query = supabase
     .from("pedidos_pagamento")

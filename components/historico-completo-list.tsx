@@ -28,6 +28,9 @@ const STATUS_OPTIONS = [
   { value: "nota_recebida", label: "Nota recebida" },
   { value: "recusado", label: "Recusado" },
   { value: "correcao", label: "Correção solicitada" },
+  { value: "aguardando_prorrogacao", label: "Prorrogação solicitada" },
+  { value: "prorrogacao_negada", label: "Prorrogação negada" },
+  { value: "expirado", label: "Expirado" },
 ]
 
 export function HistoricoCompletoList({ pedidos, equipes }: HistoricoCompletoListProps) {

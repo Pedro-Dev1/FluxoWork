@@ -80,7 +80,17 @@ export interface PedidoPagamento {
   }
 }
 
-export type StatusPedido = "pendente_gerente" | "pendente_financeiro" | "aprovado" | "recusado" | "correcao" | "pago" | "nota_recebida"
+export type StatusPedido =
+  | "pendente_gerente"
+  | "pendente_financeiro"
+  | "aprovado"
+  | "recusado"
+  | "correcao"
+  | "pago"
+  | "nota_recebida"
+  | "aguardando_prorrogacao"
+  | "prorrogacao_negada"
+  | "expirado"
 
 export interface NovoPedido {
   colaborador_id: string
