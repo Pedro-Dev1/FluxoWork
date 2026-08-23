@@ -27,6 +27,7 @@ export interface Colaborador {
   }
   bloqueado?: boolean
   data_ultimo_pedido?: string
+  ativo?: boolean
 }
 
 export interface NovoColaborador {

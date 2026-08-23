@@ -86,6 +86,10 @@ export async function login(email: string, password: string) {
     return { error: "Email ou senha incorretos." }
   }
 
+  if (colaborador.ativo === false) {
+    return { error: "Esta conta foi desativada. Entre em contato com o administrador do sistema." }
+  }
+
   // Clear rate limiting on successful login
   loginAttempts.delete(sanitizedEmail)
 

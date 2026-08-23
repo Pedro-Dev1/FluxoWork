@@ -13,6 +13,7 @@ interface PasswordConfirmDialogProps {
   onConfirm: () => void
   title?: string
   description?: string
+  confirmLabel?: string
 }
 
 const SENHA_EXCLUSAO = "Connect123@"
@@ -23,6 +24,7 @@ export function PasswordConfirmDialog({
   onConfirm,
   title = "Confirmar Exclusão",
   description = "Esta ação é irreversível. Digite a senha de confirmação para continuar.",
+  confirmLabel = "Confirmar Exclusão",
 }: PasswordConfirmDialogProps) {
   const [senha, setSenha] = useState("")
   const [erro, setErro] = useState("")
@@ -83,7 +85,7 @@ export function PasswordConfirmDialog({
               Cancelar
             </Button>
             <Button onClick={handleConfirm} variant="destructive" className="flex-1">
-              Confirmar Exclusão
+              {confirmLabel}
             </Button>
           </div>
         </div>

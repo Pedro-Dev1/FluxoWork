@@ -303,7 +303,31 @@ export async function deletarColaborador(id: string) {
     throw new Error("Erro ao deletar colaborador")
   }
 
-  revalidatePath("/colaboradores")
+  revalidatePath("/cadastros/colaboradores")
+}
+
+export async function alterarStatusAtivoColaborador(id: string, ativo: boolean) {
+  const session = await checkPermission(["Adm", "Financeiro"])
+
+  const supabase = await getSupabaseServerClient()
+
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  if (!uuidRegex.test(id)) {
+    throw new Error("ID inválido")
+  }
+
+  if (id === session.colaboradorId && !ativo) {
+    throw new Error("Você não pode desativar sua própria conta")
+  }
+
+  const { error } = await supabase.from("colaboradores").update({ ativo }).eq("id", id)
+
+  if (error) {
+    console.error("[v0] Erro ao alterar status do colaborador:", error)
+    throw new Error(`Erro ao ${ativo ? "reativar" : "desativar"} colaborador`)
+  }
+
+  revalidatePath("/cadastros/colaboradores")
 }
 
 export async function atualizarColaborador(id: string, data: Partial<NovoColaborador>) {

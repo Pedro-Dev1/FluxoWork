@@ -410,9 +410,9 @@ export function PedidoForm({ colaboradores, tipoAcesso }: PedidoFormProps) {
               </SelectTrigger>
               <SelectContent>
                 {colaboradoresFiltrados.map((c) => (
-                  <SelectItem key={c.id} value={c.id} disabled={c.bloqueado}>
+                  <SelectItem key={c.id} value={c.id} disabled={c.bloqueado || c.ativo === false}>
                     {c.nome_completo} - {fmt(c.salario)} (Dia {c.dia_pagamento})
-                    {c.bloqueado ? " [ja lancado]" : ""}
+                    {c.ativo === false ? " [inativo]" : c.bloqueado ? " [já lançado]" : ""}
                   </SelectItem>
                 ))}
               </SelectContent>
