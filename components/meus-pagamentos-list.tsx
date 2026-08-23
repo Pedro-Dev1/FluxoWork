@@ -26,6 +26,7 @@ import { PedidoTimeline } from "./pedido-timeline"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { toast } from "sonner"
 
 interface Pedido {
   id: string
@@ -95,7 +96,7 @@ export function MeusPagamentosList({ pedidos, colaborador, isHistorico = false }
       setPdfUrls((prev) => ({ ...prev, [pedidoId]: result.url }))
     } catch (error) {
       console.error("[v0] Erro ao fazer upload:", error)
-      alert(error instanceof Error ? error.message : "Erro ao fazer upload do PDF")
+      toast.error(error instanceof Error ? error.message : "Erro ao fazer upload do PDF")
     } finally {
       setUploadingPdf(null)
     }
@@ -104,17 +105,18 @@ export function MeusPagamentosList({ pedidos, colaborador, isHistorico = false }
   const handleMarcarNota = async (pedidoId: string) => {
     const pdfUrl = pdfUrls[pedidoId]
     if (!pdfUrl) {
-      alert("Por favor, anexe o PDF da nota fiscal antes de confirmar")
+      toast.error("Por favor, anexe o PDF da nota fiscal antes de confirmar")
       return
     }
 
     try {
       setLoading(pedidoId)
       await marcarNotaEmitida(pedidoId, pdfUrl)
+      toast.success("Nota fiscal enviada")
       router.refresh()
     } catch (error) {
       console.error("[v0] Erro ao marcar nota:", error)
-      alert("Erro ao marcar nota como emitida")
+      toast.error("Erro ao marcar nota como emitida")
     } finally {
       setLoading(null)
     }
@@ -122,21 +124,21 @@ export function MeusPagamentosList({ pedidos, colaborador, isHistorico = false }
 
   const handleSolicitarProrrogacao = async (pedidoId: string) => {
     if (!motivoProrrogacao.trim()) {
-      alert("Por favor, informe o motivo da solicitação")
+      toast.error("Por favor, informe o motivo da solicitação")
       return
     }
 
     try {
       setSolicitandoProrrogacao(true)
       const result = await solicitarProrrogacaoPrazo(pedidoId, motivoProrrogacao)
-      alert(result.message)
+      toast.success(result.message)
       setProrrogacaoDialogOpen(false)
       setMotivoProrrogacao("")
       setPedidoSelecionado(null)
       router.refresh()
     } catch (error) {
       console.error("[v0] Erro ao solicitar prorrogação:", error)
-      alert(error instanceof Error ? error.message : "Erro ao solicitar prorrogação")
+      toast.error(error instanceof Error ? error.message : "Erro ao solicitar prorrogação")
     } finally {
       setSolicitandoProrrogacao(false)
     }
@@ -162,7 +164,7 @@ export function MeusPagamentosList({ pedidos, colaborador, isHistorico = false }
 
   const openPdfSafely = (url: string | undefined) => {
     if (!url || url.includes("undefined") || url.includes("null") || url.trim() === "") {
-      alert("Arquivo PDF não disponível ou foi removido.")
+      toast.error("Arquivo PDF não disponível ou foi removido.")
       console.error("[v0] Invalid PDF URL:", url)
       return
     }

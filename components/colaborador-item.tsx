@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { ColaboradorEditDialog } from "./colaborador-edit-dialog"
 import { formatCurrency } from "@/lib/utils"
 import { PasswordConfirmDialog } from "./password-confirm-dialog"
+import { toast } from "sonner"
 
 interface ColaboradorItemProps {
   colaborador: Colaborador
@@ -46,7 +47,7 @@ export function ColaboradorItem({ colaborador, usuarioLogadoTipoAcesso }: Colabo
     } catch (error) {
       console.error("[v0] Erro ao deletar:", error)
       const errorMessage = error instanceof Error ? error.message : "Erro ao deletar colaborador"
-      alert(errorMessage)
+      toast.error(errorMessage)
     } finally {
       setLoading(false)
     }

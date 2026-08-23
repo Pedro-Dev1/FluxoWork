@@ -10,6 +10,7 @@ import { FileText, DollarSign, Clock, Car, Percent, Download, Search, Calendar }
 import type { PedidoPagamento } from "@/types/pedido"
 import { useRouter } from "next/navigation"
 import { useMaskedCurrency } from "@/components/currency-display"
+import { toast } from "sonner"
 
 interface FinanceiroListProps {
   pedidos: PedidoPagamento[]
@@ -277,7 +278,7 @@ export function FinanceiroList({ pedidos }: FinanceiroListProps) {
                             const url = pedido.notas_fiscais[0]?.arquivo_url
                             if (!url || url.includes("undefined") || url.includes("null")) {
                               e.preventDefault()
-                              alert("Arquivo XML não disponível ou foi removido.")
+                              toast.error("Arquivo XML não disponível ou foi removido.")
                             }
                           }}
                         >
@@ -299,7 +300,7 @@ export function FinanceiroList({ pedidos }: FinanceiroListProps) {
                                 pedido.nota_fiscal_url.includes("null")
                               ) {
                                 e.preventDefault()
-                                alert("Arquivo PDF não disponível ou foi removido.")
+                                toast.error("Arquivo PDF não disponível ou foi removido.")
                               }
                             }}
                           >

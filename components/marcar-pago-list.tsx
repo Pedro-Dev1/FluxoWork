@@ -32,6 +32,7 @@ import { useMaskedCurrency } from "@/components/currency-display"
 import { useSystemStatus } from "./system-status-provider"
 import { SystemSuspendedDialog } from "./system-suspended-dialog"
 import { SimplePager } from "@/components/ui/simple-pager"
+import { toast } from "sonner"
 
 interface MarcarPagoListProps {
   pedidos: PedidoPagamento[]
@@ -61,6 +62,7 @@ export function MarcarPagoList({ pedidos }: MarcarPagoListProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [recusarAlvo, setRecusarAlvo] = useState<string | null>(null)
   const [motivoRecusa, setMotivoRecusa] = useState("")
+  const [confirmAlvo, setConfirmAlvo] = useState<{ pedido: PedidoPagamento; tipo: "aprovar-nota" | "marcar-pago" } | null>(null)
   const [showFilters, setShowFilters] = useState(false)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(25)
@@ -99,19 +101,23 @@ export function MarcarPagoList({ pedidos }: MarcarPagoListProps) {
     setEquipeFiltro("todas")
   }
 
-  const handleAprovarNota = async (pedidoId: string) => {
+  const handleAprovarNota = (pedido: PedidoPagamento) => {
     if (isSystemSuspended) {
       setSuspendedDialogOpen(true)
       return
     }
-    if (!confirm("Deseja marcar esta nota como recebida?")) return
+    setConfirmAlvo({ pedido, tipo: "aprovar-nota" })
+  }
+
+  const executarAprovarNota = async (pedidoId: string) => {
     try {
       setApprovingId(pedidoId)
       await aprovarNotaFiscal(pedidoId)
+      toast.success("Nota fiscal marcada como recebida")
       router.refresh()
     } catch (error) {
       console.error("[v0] Erro ao aprovar nota:", error)
-      alert(error instanceof Error ? error.message : "Erro ao aprovar nota fiscal")
+      toast.error(error instanceof Error ? error.message : "Erro ao aprovar nota fiscal")
     } finally {
       setApprovingId(null)
     }
@@ -121,39 +127,54 @@ export function MarcarPagoList({ pedidos }: MarcarPagoListProps) {
     if (!recusarAlvo) return
     const motivo = motivoRecusa.trim()
     if (!motivo) {
-      alert("Por favor, informe o motivo da recusa")
+      toast.error("Por favor, informe o motivo da recusa")
       return
     }
     try {
       setRejectingId(recusarAlvo)
       await recusarNotaFiscal(recusarAlvo, motivo)
+      toast.success("Nota fiscal recusada")
       setMotivoRecusa("")
       setRecusarAlvo(null)
       router.refresh()
     } catch (error) {
       console.error("[v0] Erro ao recusar nota:", error)
-      alert(error instanceof Error ? error.message : "Erro ao recusar nota fiscal")
+      toast.error(error instanceof Error ? error.message : "Erro ao recusar nota fiscal")
     } finally {
       setRejectingId(null)
     }
   }
 
-  const handleMarcarPago = async (pedidoId: string) => {
+  const handleMarcarPago = (pedido: PedidoPagamento) => {
     if (isSystemSuspended) {
       setSuspendedDialogOpen(true)
       return
     }
-    if (!confirm("Confirma que este pedido foi pago?")) return
+    setConfirmAlvo({ pedido, tipo: "marcar-pago" })
+  }
+
+  const executarMarcarPago = async (pedidoId: string) => {
     try {
       setPayingId(pedidoId)
       await marcarPedidoPago(pedidoId)
+      toast.success("Pedido marcado como pago")
       router.refresh()
     } catch (error) {
       console.error("[v0] Erro ao marcar como pago:", error)
-      alert(error instanceof Error ? error.message : "Erro ao marcar pedido como pago")
+      toast.error(error instanceof Error ? error.message : "Erro ao marcar pedido como pago")
     } finally {
       setPayingId(null)
     }
+  }
+
+  const confirmarAcao = async () => {
+    if (!confirmAlvo) return
+    if (confirmAlvo.tipo === "aprovar-nota") {
+      await executarAprovarNota(confirmAlvo.pedido.id)
+    } else {
+      await executarMarcarPago(confirmAlvo.pedido.id)
+    }
+    setConfirmAlvo(null)
   }
 
   if (pedidos.length === 0) {
@@ -196,6 +217,72 @@ export function MarcarPagoList({ pedidos }: MarcarPagoListProps) {
               disabled={rejectingId === recusarAlvo}
             >
               {rejectingId === recusarAlvo ? "Recusando..." : "Confirmar recusa"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!confirmAlvo} onOpenChange={(open) => !open && setConfirmAlvo(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {confirmAlvo?.tipo === "aprovar-nota" ? "Marcar nota como recebida" : "Marcar pedido como pago"}
+            </DialogTitle>
+          </DialogHeader>
+          {confirmAlvo && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between rounded-control bg-surface px-3 py-2">
+                <p className="text-sm font-medium text-foreground">{confirmAlvo.pedido.colaborador?.nome_completo || "Colaborador"}</p>
+                <p className="text-lg font-semibold tabular-nums text-foreground">{formatValue(confirmAlvo.pedido.valor_total)}</p>
+              </div>
+              {(() => {
+                const { isReembolsoKm, valorNF } = composicaoDe(confirmAlvo.pedido)
+                return (
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    {isReembolsoKm ? (
+                      <div>
+                        <p className="text-xs text-text-tertiary">Quilometragem</p>
+                        <p className="font-medium tabular-nums">{formatValue(confirmAlvo.pedido.valor_km || 0)}</p>
+                      </div>
+                    ) : (
+                      <>
+                        <div>
+                          <p className="text-xs text-text-tertiary">Salário</p>
+                          <p className="font-medium tabular-nums">
+                            {formatValue(confirmAlvo.pedido.salario_base ?? confirmAlvo.pedido.colaborador?.salario ?? 0)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-text-tertiary">Horas extras</p>
+                          <p className="font-medium tabular-nums">{formatValue(confirmAlvo.pedido.horas_extras || 0)}</p>
+                        </div>
+                        {(confirmAlvo.pedido.valor_desconto || 0) > 0 && (
+                          <div>
+                            <p className="text-xs text-text-tertiary">Desconto</p>
+                            <p className="font-medium tabular-nums text-danger">-{formatValue(confirmAlvo.pedido.valor_desconto || 0)}</p>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )
+              })()}
+              <p className="text-sm text-text-secondary">
+                {confirmAlvo.tipo === "aprovar-nota"
+                  ? "Confirma que a nota fiscal deste pedido foi recebida e conferida?"
+                  : "Confirma que este pedido foi pago?"}
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmAlvo(null)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={confirmarAcao}
+              disabled={confirmAlvo ? (confirmAlvo.tipo === "aprovar-nota" ? approvingId : payingId) === confirmAlvo.pedido.id : false}
+            >
+              Confirmar
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -309,7 +396,7 @@ export function MarcarPagoList({ pedidos }: MarcarPagoListProps) {
                             <>
                               <button
                                 title="Marcar nota como recebida"
-                                onClick={() => handleAprovarNota(pedido.id)}
+                                onClick={() => handleAprovarNota(pedido)}
                                 disabled={approvingId === pedido.id}
                                 className="h-7 w-7 inline-flex items-center justify-center rounded-control text-success hover:bg-success-subtle disabled:opacity-50"
                               >
@@ -330,7 +417,7 @@ export function MarcarPagoList({ pedidos }: MarcarPagoListProps) {
                           {podeMarcarPago && (
                             <button
                               title="Marcar como pago"
-                              onClick={() => handleMarcarPago(pedido.id)}
+                              onClick={() => handleMarcarPago(pedido)}
                               disabled={payingId === pedido.id}
                               className="h-7 px-2 inline-flex items-center gap-1 rounded-control text-xs font-medium text-primary hover:bg-accent disabled:opacity-50"
                             >
@@ -422,7 +509,7 @@ export function MarcarPagoList({ pedidos }: MarcarPagoListProps) {
                                 onClick={(e) => {
                                   if (!pdfUrl || pdfUrl.includes("undefined")) {
                                     e.preventDefault()
-                                    alert("PDF não disponível.")
+                                    toast.error("PDF não disponível.")
                                   }
                                 }}
                                 className="inline-flex items-center gap-1 text-primary hover:underline font-medium"

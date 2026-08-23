@@ -11,6 +11,7 @@ import { AutoLogoutProvider } from "@/components/auto-logout-provider"
 import { ValoresVisibilityProvider } from "@/contexts/valores-visibility-context"
 import { TermsAcceptanceProvider } from "@/components/terms-acceptance-provider"
 import { SystemStatusProvider } from "@/components/system-status-provider"
+import { Toaster } from "@/components/ui/sonner"
 import cn from "classnames"
 
 const geistSans = Geist({
@@ -43,6 +44,7 @@ export default async function RootLayout({
   return (
     <html lang="pt-BR" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body className="antialiased bg-background">
+        <Toaster richColors position="top-right" />
         <ValoresVisibilityProvider>
           {!isAuthPage && <SidebarNavigation tipoAcesso={session?.tipoAcesso} />}
 

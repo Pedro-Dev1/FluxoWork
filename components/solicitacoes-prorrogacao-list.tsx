@@ -17,6 +17,7 @@ import {
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
+import { toast } from "sonner"
 
 interface Pedido {
   id: string
@@ -60,7 +61,7 @@ export function SolicitacoesProrrogacaoList({ solicitacoes }: SolicitacoesProrro
       let diasExtensao: number | undefined
       if (acaoSelecionada === "aprovar") {
         if (!novaData) {
-          alert("Por favor, selecione a nova data limite")
+          toast.error("Por favor, selecione a nova data limite")
           return
         }
         const dataEscolhida = new Date(novaData + "T12:00:00")
@@ -68,7 +69,7 @@ export function SolicitacoesProrrogacaoList({ solicitacoes }: SolicitacoesProrro
         diasExtensao = Math.ceil((dataEscolhida.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24))
 
         if (diasExtensao < 1) {
-          alert("A nova data deve ser futura")
+          toast.error("A nova data deve ser futura")
           return
         }
       }
@@ -79,6 +80,7 @@ export function SolicitacoesProrrogacaoList({ solicitacoes }: SolicitacoesProrro
         observacao,
         diasExtensao,
       )
+      toast.success(acaoSelecionada === "aprovar" ? "Prorrogação aprovada" : "Solicitação negada")
       setDialogOpen(false)
       setObservacao("")
       setNovaData("")
@@ -87,7 +89,7 @@ export function SolicitacoesProrrogacaoList({ solicitacoes }: SolicitacoesProrro
       router.refresh()
     } catch (error) {
       console.error("[v0] Erro ao responder solicitação:", error)
-      alert(error instanceof Error ? error.message : "Erro ao processar solicitação")
+      toast.error(error instanceof Error ? error.message : "Erro ao processar solicitação")
     } finally {
       setLoading(null)
     }

@@ -12,6 +12,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { aplicarReajuste } from "@/app/actions/reajustes"
 import type { Colaborador } from "@/types/colaborador"
 import { Percent, DollarSign } from "lucide-react"
+import { toast } from "sonner"
 
 interface ReajusteDialogProps {
   open: boolean
@@ -46,14 +47,16 @@ export function ReajusteDialog({ open, onOpenChange, colaborador, onSuccess }: R
         motivo: motivo || undefined,
       })
 
-      const mensagem = `Reajuste aplicado com sucesso!\n\nColaborador: ${resultado.colaborador}\nSalário Anterior: ${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(resultado.salarioAnterior)}\nNovo Salário: ${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(resultado.salarioNovo)}`
+      const formatCurrency = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v)
 
-      alert(mensagem)
+      toast.success(`Reajuste aplicado para ${resultado.colaborador}`, {
+        description: `${formatCurrency(resultado.salarioAnterior)} → ${formatCurrency(resultado.salarioNovo)}`,
+      })
       setValorReajuste("")
       setMotivo("")
       onSuccess()
     } catch (error: any) {
-      alert(error.message || "Erro ao aplicar reajuste")
+      toast.error(error.message || "Erro ao aplicar reajuste")
     } finally {
       setLoading(false)
     }

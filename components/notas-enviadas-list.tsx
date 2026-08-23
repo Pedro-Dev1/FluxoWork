@@ -25,7 +25,14 @@ import { useRouter } from "next/navigation"
 import { listarEquipes } from "@/app/actions/equipes"
 import { aprovarNotaFiscal, recusarNotaFiscal } from "@/app/actions/pedidos"
 import type { Equipe } from "@/types/equipe"
-import type { Pedido } from "@/types/pedido" // Import Pedido type
+import { toast } from "sonner"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
 
 interface NotasEnviadasListProps {
   pedidos: PedidoPagamento[]
@@ -39,6 +46,7 @@ export function NotasEnviadasList({ pedidos, canApprove = true }: NotasEnviadasL
   const [rejectingId, setRejectingId] = useState<string | null>(null)
   const [motivoRecusa, setMotivoRecusa] = useState<{ [key: string]: string }>({})
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [confirmAlvo, setConfirmAlvo] = useState<{ pedidoId: string; tipo: "aprovar" | "recusar" } | null>(null)
   const [filtros, setFiltros] = useState({
     dataInicio: "",
     dataFim: "",
@@ -65,7 +73,7 @@ export function NotasEnviadasList({ pedidos, canApprove = true }: NotasEnviadasL
     router.push("/financeiro")
   }
 
-  const handleAprovarNota = async (pedidoId: string) => {
+  const handleAprovarNota = (pedidoId: string) => {
     const pedido = pedidos.find((p) => p.id === pedidoId)
     if (!pedido) return
 
@@ -88,63 +96,65 @@ export function NotasEnviadasList({ pedidos, canApprove = true }: NotasEnviadasL
 
     // Block if no nota and not KM-only
     if (!hasNotaFiscal && !isReembolsoKm && !hasOnlyKm) {
-      alert(
+      toast.error(
         "Este pedido não pode ser aprovado pois não possui nota fiscal anexada. Solicite ao colaborador que anexe a nota fiscal primeiro.",
       )
       return
     }
 
-    if (!confirm("Deseja marcar esta nota como recebida?")) {
-      return
-    }
+    setConfirmAlvo({ pedidoId, tipo: "aprovar" })
+  }
 
+  const executarAprovarNota = async (pedidoId: string) => {
     try {
       setApprovingId(pedidoId)
       await aprovarNotaFiscal(pedidoId)
-      alert("Nota marcada como recebida com sucesso!")
+      toast.success("Nota marcada como recebida com sucesso!")
       router.refresh()
     } catch (error) {
       console.error("[v0] Erro ao aprovar nota:", error)
-      alert(error instanceof Error ? error.message : "Erro ao aprovar nota fiscal")
+      toast.error(error instanceof Error ? error.message : "Erro ao aprovar nota fiscal")
     } finally {
       setApprovingId(null)
     }
   }
 
-  const handleRecusarNota = async (pedidoId: string) => {
+  const handleRecusarNota = (pedidoId: string) => {
     const motivo = motivoRecusa[pedidoId]?.trim()
 
     if (!motivo) {
-      alert("Por favor, informe o motivo da recusa")
+      toast.error("Por favor, informe o motivo da recusa")
       return
     }
 
-    if (!confirm("Deseja recusar esta nota e solicitar correção ao colaborador?")) {
-      return
-    }
+    setConfirmAlvo({ pedidoId, tipo: "recusar" })
+  }
 
+  const executarRecusarNota = async (pedidoId: string) => {
+    const motivo = motivoRecusa[pedidoId]?.trim()
+    if (!motivo) return
     try {
       setRejectingId(pedidoId)
       await recusarNotaFiscal(pedidoId, motivo)
-      alert("Nota fiscal recusada. O colaborador foi notificado para anexar uma nova nota.")
+      toast.success("Nota fiscal recusada. O colaborador foi notificado para anexar uma nova nota.")
       setMotivoRecusa({ ...motivoRecusa, [pedidoId]: "" })
       router.refresh()
     } catch (error) {
       console.error("[v0] Erro ao recusar nota:", error)
-      alert(error instanceof Error ? error.message : "Erro ao recusar nota fiscal")
+      toast.error(error instanceof Error ? error.message : "Erro ao recusar nota fiscal")
     } finally {
       setRejectingId(null)
     }
   }
 
-  const aprovarNota = async (pedido: Pedido) => {
-    const hasNotaFiscal =
-      pedido.nota_fiscal_url || // Check old field first
-      (pedido.notas_fiscais &&
-        ((Array.isArray(pedido.notas_fiscais) && pedido.notas_fiscais.length > 0) ||
-          (!Array.isArray(pedido.notas_fiscais) && pedido.notas_fiscais)))
-
-    return hasNotaFiscal
+  const confirmarAcao = async () => {
+    if (!confirmAlvo) return
+    if (confirmAlvo.tipo === "aprovar") {
+      await executarAprovarNota(confirmAlvo.pedidoId)
+    } else {
+      await executarRecusarNota(confirmAlvo.pedidoId)
+    }
+    setConfirmAlvo(null)
   }
 
   if (pedidos.length === 0) {
@@ -164,6 +174,76 @@ export function NotasEnviadasList({ pedidos, canApprove = true }: NotasEnviadasL
 
   return (
     <div className="space-y-6">
+      <Dialog open={!!confirmAlvo} onOpenChange={(open) => !open && setConfirmAlvo(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{confirmAlvo?.tipo === "aprovar" ? "Marcar nota como recebida" : "Recusar nota fiscal"}</DialogTitle>
+          </DialogHeader>
+          {confirmAlvo &&
+            (() => {
+              const pedido = pedidos.find((p) => p.id === confirmAlvo.pedidoId)
+              if (!pedido) return null
+              const isReembolsoKm = pedido.tipo_pedido === "reembolso_km"
+              const valorEsperadoNF = isReembolsoKm
+                ? pedido.valor_km
+                : (pedido.salario_base ?? pedido.colaborador?.salario ?? 0) +
+                  (pedido.horas_extras || 0) +
+                  (pedido.valor_plantao || 0) +
+                  (pedido.comissao || 0) -
+                  (pedido.valor_desconto || 0)
+              return (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between rounded-control bg-surface px-3 py-2">
+                    <p className="text-sm font-medium text-foreground">{pedido.colaborador?.nome_completo || "Colaborador"}</p>
+                    <p className="text-lg font-semibold tabular-nums text-foreground">
+                      R$ {pedido.valor_total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <p className="text-xs text-text-tertiary">Valor da nota fiscal</p>
+                      <p className="font-medium tabular-nums">
+                        R$ {valorEsperadoNF.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                    {(pedido.valor_desconto || 0) > 0 && (
+                      <div>
+                        <p className="text-xs text-text-tertiary">Desconto</p>
+                        <p className="font-medium tabular-nums text-danger">
+                          -R$ {(pedido.valor_desconto || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  {confirmAlvo.tipo === "recusar" && (
+                    <div>
+                      <p className="text-xs text-text-tertiary mb-0.5">Motivo da recusa</p>
+                      <p className="text-sm text-text-secondary">{motivoRecusa[confirmAlvo.pedidoId]}</p>
+                    </div>
+                  )}
+                  <p className="text-sm text-text-secondary">
+                    {confirmAlvo.tipo === "aprovar"
+                      ? "Confirma que a nota fiscal foi recebida e conferida?"
+                      : "Confirma a recusa desta nota? O colaborador será notificado para anexar uma nova."}
+                  </p>
+                </div>
+              )
+            })()}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmAlvo(null)}>
+              Cancelar
+            </Button>
+            <Button
+              variant={confirmAlvo?.tipo === "recusar" ? "destructive" : "default"}
+              onClick={confirmarAcao}
+              disabled={confirmAlvo ? (confirmAlvo.tipo === "aprovar" ? approvingId : rejectingId) === confirmAlvo.pedidoId : false}
+            >
+              Confirmar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Filtros */}
       <Card className="p-4">
         <h3 className="text-base font-semibold mb-3 flex items-center gap-2">
@@ -337,7 +417,7 @@ export function NotasEnviadasList({ pedidos, canApprove = true }: NotasEnviadasL
                           if (!pdfUrl || pdfUrl.includes("undefined") || pdfUrl.includes("null")) {
                             e.preventDefault()
                             console.error("[v0] Invalid PDF URL:", pdfUrl)
-                            alert("Arquivo PDF não disponível ou foi removido.")
+                            toast.error("Arquivo PDF não disponível ou foi removido.")
                           }
                         }}
                       >
