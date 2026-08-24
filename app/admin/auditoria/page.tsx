@@ -13,6 +13,11 @@ const ACAO_LABELS: Record<string, string> = {
   super_admin_promovido: "Super Admin promovido",
   super_admin_revogado: "Super Admin revogado",
   login_super_admin: "Login de Super Admin",
+  faturamento_configurado: "Faturamento configurado",
+  fatura_plataforma_emitida: "Fatura emitida",
+  fatura_plataforma_paga: "Fatura paga",
+  fatura_plataforma_falhou: "Falha ao emitir fatura",
+  fatura_plataforma_cancelada: "Fatura cancelada",
 }
 
 function nomeRelacionado(rel: any): string {

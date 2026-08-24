@@ -7,7 +7,9 @@ import { createAdminClient } from "./supabase-server"
 // app/actions/*.ts, depois de requireRole([])) deve importar daqui.
 
 export async function registrarAuditoria(params: {
-  colaboradorId: string
+  // null = ação disparada pelo sistema (ex.: cron de faturamento), sem um
+  // colaborador humano por trás.
+  colaboradorId: string | null
   tenantId: string | null
   acao: string
   tabela?: string

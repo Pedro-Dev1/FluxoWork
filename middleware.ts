@@ -1,7 +1,18 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { verifyAndParse } from "./lib/session-crypto"
 
+// Chamadas de fora (Vercel Cron, webhook da Pagar.me) nunca têm o cookie de
+// sessão — cada uma dessas rotas já valida sua própria autenticação
+// (Bearer CRON_SECRET / Basic Auth do webhook) e precisa responder 401/200
+// JSON direto, não um redirect 307 pra /login, que quebraria o cron e faria
+// a Pagar.me tratar a entrega como falha e reenviar.
+const ROTAS_EXTERNAS_AUTOAUTENTICADAS = ["/api/cron/", "/api/webhooks/"]
+
 export async function middleware(request: NextRequest) {
+  if (ROTAS_EXTERNAS_AUTOAUTENTICADAS.some((rota) => request.nextUrl.pathname.startsWith(rota))) {
+    return NextResponse.next()
+  }
+
   const response = NextResponse.next({
     request: {
       headers: request.headers,

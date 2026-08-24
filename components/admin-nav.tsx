@@ -9,6 +9,7 @@ const ITENS = [
   { href: "/admin/carteiras", label: "Carteiras" },
   { href: "/admin/usuarios", label: "Usuários" },
   { href: "/admin/auditoria", label: "Auditoria" },
+  { href: "/admin/faturamento", label: "Faturamento" },
   { href: "/atualizacoes/gerenciar", label: "Atualizações" },
 ]
 

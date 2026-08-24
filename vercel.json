@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/gerar-faturas-mensais",
+      "schedule": "0 9 * * *"
+    }
+  ]
+}
