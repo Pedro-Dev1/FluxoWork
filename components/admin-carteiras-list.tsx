@@ -52,7 +52,9 @@ export function AdminCarteirasList({ carteirasIniciais }: { carteirasIniciais: C
   const recarregar = async () => {
     try {
       setCarteiras(await listarTenants())
-    } catch {}
+    } catch (error) {
+      console.error("[v0] Erro ao recarregar carteiras:", error)
+    }
   }
 
   const handleNomeChange = (valor: string) => {

@@ -214,10 +214,18 @@ export async function cancelarFatura(
     return { success: false, error: resultado.error }
   }
 
-  await supabase
+  const { error: updateError } = await supabase
     .from("faturas_plataforma")
     .update({ status: "cancelada", updated_at: new Date().toISOString() })
     .eq("id", faturaId)
+
+  if (updateError) {
+    // A cobrança já foi cancelada de verdade na Pagar.me nesse ponto — não dá
+    // pra desfazer isso. Reportar como falha pra alguém saber que o status
+    // aqui ficou desatualizado, em vez de devolver sucesso silenciosamente.
+    console.error("[v0] Cobrança cancelada na Pagar.me mas falhou ao salvar no banco:", updateError)
+    return { success: false, error: "Cobrança cancelada na Pagar.me, mas houve erro ao atualizar o status aqui. Atualize a página." }
+  }
 
   await registrarAuditoria({
     colaboradorId: acionadoPor,

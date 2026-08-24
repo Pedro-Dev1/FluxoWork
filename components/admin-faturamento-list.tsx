@@ -108,7 +108,9 @@ export function AdminFaturamentoList({
       ])
       setCarteiras(novasCarteiras)
       setFaturas(novasFaturas)
-    } catch {}
+    } catch (error) {
+      console.error("[v0] Erro ao recarregar faturamento:", error)
+    }
   }
 
   const abrirConfig = (carteira: CarteiraFaturamento) => {

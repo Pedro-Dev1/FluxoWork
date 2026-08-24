@@ -79,7 +79,9 @@ export function AdminUsuariosList({
       ])
       setColaboradores(novosColaboradores as any)
       setSuperAdmins(novosSuperAdmins)
-    } catch {}
+    } catch (error) {
+      console.error("[v0] Erro ao recarregar usuários:", error)
+    }
   }
 
   const confirmarPromover = async () => {
