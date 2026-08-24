@@ -11,7 +11,7 @@ export async function middleware(request: NextRequest) {
   response.headers.set("x-pathname", request.nextUrl.pathname)
 
   const sessionCookie = request.cookies.get("fluxopay_session")
-  const session = await verifyAndParse<{ tipoAcesso: string }>(sessionCookie?.value)
+  const session = await verifyAndParse<{ tipoAcesso: string; isSuperAdmin?: boolean }>(sessionCookie?.value)
 
   const publicRoutes = ["/login", "/setup", "/faq", "/termos", "/privacidade", "/esqueci-senha", "/redefinir-senha"]
   const isPublicRoute = publicRoutes.some((route) => request.nextUrl.pathname.startsWith(route))
@@ -26,6 +26,12 @@ export async function middleware(request: NextRequest) {
     if (!request.nextUrl.pathname.startsWith("/meus-pagamentos")) {
       return NextResponse.redirect(new URL("/meus-pagamentos", request.url))
     }
+  }
+
+  // /admin/* é exclusivo do Super Admin — cada page ali já tem seu próprio
+  // guard, isso é defesa em profundidade pra quem tentar acessar direto pela URL.
+  if (request.nextUrl.pathname.startsWith("/admin") && !session?.isSuperAdmin) {
+    return NextResponse.redirect(new URL("/", request.url))
   }
 
   return response

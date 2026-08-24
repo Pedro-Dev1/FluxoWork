@@ -7,6 +7,7 @@ import { redirect } from "next/navigation"
 import bcrypt from "bcryptjs"
 import crypto from "crypto"
 import { enviarEmailRedefinicaoSenha } from "@/lib/email"
+import { registrarAuditoria } from "@/lib/auditoria"
 
 function validarForcaSenha(senha: string): string | null {
   if (senha.length < 8) return "A nova senha deve ter no mínimo 8 caracteres"
@@ -115,6 +116,16 @@ export async function login(email: string, password: string) {
     tenantId: colaborador.tenant_id ?? null,
     isSuperAdmin: colaborador.is_super_admin ?? false,
   })
+
+  if (colaborador.is_super_admin) {
+    // Só logins de Super Admin são auditados — login de colaborador comum
+    // vira ruído sem valor no audit_log.
+    await registrarAuditoria({
+      colaboradorId: colaborador.id,
+      tenantId: null,
+      acao: "login_super_admin",
+    })
+  }
 
   revalidatePath("/", "layout")
 
