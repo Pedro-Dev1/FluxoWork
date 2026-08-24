@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { ChevronDown, Search, Mail, Phone, HelpCircle, Shield, CreditCard, Users, Key } from "lucide-react"
+import { ChevronDown, Search, Mail, HelpCircle, Shield, CreditCard, Users, Key } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { LegalPageShell } from "@/components/legal-page-shell"
 import { cn } from "@/lib/utils"
@@ -20,7 +20,7 @@ const faqCategories = [
       {
         question: "Como recupero minha senha?",
         answer:
-          "Clique em 'Esqueci minha senha' na tela de login e informe seu e-mail cadastrado. Você receberá um link de redefinição válido por 30 minutos. Se não chegar, contate simpleqia.oficial@gmail.com ou (11) 91486-0806 via WhatsApp com seu nome e empresa.",
+          "Clique em 'Esqueci minha senha' na tela de login e informe seu e-mail cadastrado. Você receberá um link de redefinição válido por 30 minutos. Se não chegar, contate simpleqia.oficial@gmail.com com seu nome e empresa.",
       },
       {
         question: "Por que minha conta foi bloqueada?",
@@ -74,7 +74,7 @@ const faqCategories = [
       {
         question: "Como reportar uma suspeita de incidente de segurança?",
         answer:
-          "Notifique imediatamente via simpleqia.oficial@gmail.com ou WhatsApp (11) 91486-0806. Descreva o ocorrido, horário e funcionalidade envolvida. Nunca compartilhe sua senha com ninguém, nem com o suporte. SLA de resposta de 4 horas para incidentes críticos.",
+          "Notifique imediatamente via simpleqia.oficial@gmail.com. Descreva o ocorrido, horário e funcionalidade envolvida. Nunca compartilhe sua senha com ninguém, nem com o suporte. SLA de resposta de 4 horas para incidentes críticos.",
       },
       {
         question: "O sistema registra minhas ações?",
@@ -91,7 +91,7 @@ const faqCategories = [
       {
         question: "Quais são os canais de suporte?",
         answer:
-          "E-mail: simpleqia.oficial@gmail.com (resposta em até 24h úteis). WhatsApp: (11) 91486-0806 (seg-sex 8h-18h). Para incidentes críticos de produção: SLA de 4 horas corridas, 7 dias por semana. Sempre informe empresa, e-mail de acesso e descrição detalhada do problema.",
+          "E-mail: simpleqia.oficial@gmail.com (resposta em até 24h úteis). Para incidentes críticos de produção: SLA de 4 horas corridas, 7 dias por semana. Sempre informe empresa, e-mail de acesso e descrição detalhada do problema.",
       },
       {
         question: "Como solicitar criação ou remoção de usuários?",
@@ -228,15 +228,6 @@ export default function FAQPage() {
           >
             <Mail className="h-4 w-4" />
             simpleqia.oficial@gmail.com
-          </a>
-          <a
-            href="https://wa.me/5511914860806"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 px-5 py-2.5 bg-card text-foreground rounded-control text-sm font-medium hover:bg-surface transition-colors border border-border"
-          >
-            <Phone className="h-4 w-4" />
-            (11) 91486-0806
           </a>
         </div>
       </div>

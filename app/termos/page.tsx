@@ -1,4 +1,4 @@
-import { FileText, Calendar, Mail, Phone, AlertTriangle, Info } from "lucide-react"
+import { FileText, Calendar, Mail, AlertTriangle, Info } from "lucide-react"
 import { LegalPageShell } from "@/components/legal-page-shell"
 
 export default function TermosPage() {
@@ -207,15 +207,6 @@ export default function TermosPage() {
             <a href="mailto:simpleqia.oficial@gmail.com" className="flex items-center gap-2 text-primary hover:underline text-sm">
               <Mail className="h-4 w-4" />
               simpleqia.oficial@gmail.com
-            </a>
-            <a
-              href="https://wa.me/5511914860806"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 text-primary hover:underline text-sm"
-            >
-              <Phone className="h-4 w-4" />
-              (11) 91486-0806
             </a>
           </div>
         </section>

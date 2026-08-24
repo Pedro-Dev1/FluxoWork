@@ -1,6 +1,6 @@
 "use client"
 
-import { AlertTriangle, Mail, Phone } from "lucide-react"
+import { AlertTriangle, Mail } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 
 interface SystemSuspendedScreenProps {
@@ -35,21 +35,12 @@ export function SystemSuspendedScreen({ reason }: SystemSuspendedScreenProps) {
               Em caso de duvidas, entre em contato:
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 text-sm">
-              <a 
-                href="mailto:simpleqia.oficial@gmail.com" 
+              <a
+                href="mailto:simpleqia.oficial@gmail.com"
                 className="flex items-center gap-2 text-primary hover:underline"
               >
                 <Mail className="h-4 w-4" />
                 simpleqia.oficial@gmail.com
-              </a>
-              <a 
-                href="https://wa.me/5511914860806" 
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 text-primary hover:underline"
-              >
-                <Phone className="h-4 w-4" />
-                (11) 91486-0806
               </a>
             </div>
           </div>

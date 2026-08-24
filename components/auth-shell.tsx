@@ -47,8 +47,6 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
           <p>2026 FluxoPay — Simpleqia. Todos os direitos reservados.</p>
           <div className="flex items-center gap-3">
             <span>Suporte: simpleqia.oficial@gmail.com</span>
-            <span className="text-border-strong">|</span>
-            <span>(11) 91486-0806</span>
           </div>
         </div>
       </footer>

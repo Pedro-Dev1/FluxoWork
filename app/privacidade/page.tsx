@@ -1,4 +1,4 @@
-import { Shield, Calendar, Mail, Phone, Info, CheckCircle } from "lucide-react"
+import { Shield, Calendar, Mail, Info, CheckCircle } from "lucide-react"
 import { LegalPageShell } from "@/components/legal-page-shell"
 
 export default function PrivacidadePage() {
@@ -261,7 +261,7 @@ export default function PrivacidadePage() {
             <li>Fornecerá relatório de incidente com causa, dados afetados e medidas adotadas</li>
           </ul>
           <p className="text-text-secondary text-sm leading-relaxed">
-            Para reportar incidentes: simpleqia.oficial@gmail.com ou (11) 91486-0806
+            Para reportar incidentes: simpleqia.oficial@gmail.com
           </p>
         </section>
 
@@ -276,15 +276,6 @@ export default function PrivacidadePage() {
             <a href="mailto:simpleqia.oficial@gmail.com" className="flex items-center gap-2 text-primary hover:underline text-sm">
               <Mail className="h-4 w-4" />
               simpleqia.oficial@gmail.com
-            </a>
-            <a
-              href="https://wa.me/5511914860806"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 text-primary hover:underline text-sm"
-            >
-              <Phone className="h-4 w-4" />
-              (11) 91486-0806
             </a>
           </div>
         </section>
