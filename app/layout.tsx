@@ -6,6 +6,7 @@ import "./main.css"
 import { SidebarNavigation } from "@/components/sidebar-navigation"
 import { UserHeader } from "@/components/user-header"
 import { getSession } from "@/lib/session"
+import { listarTenants } from "@/app/actions/tenants"
 import { headers } from "next/headers"
 import { AutoLogoutProvider } from "@/components/auto-logout-provider"
 import { ValoresVisibilityProvider } from "@/contexts/valores-visibility-context"
@@ -39,6 +40,8 @@ export default async function RootLayout({
   const headersList = await headers()
   const pathname = headersList.get("x-pathname") || ""
 
+  const tenantsParaSwitcher = session?.isSuperAdmin ? await listarTenants().catch(() => []) : []
+
   const isAuthPage =
     pathname === "/login" ||
     pathname === "/setup" ||
@@ -53,7 +56,7 @@ export default async function RootLayout({
       <body className="antialiased bg-background">
         <Toaster richColors position="top-right" />
         <ValoresVisibilityProvider>
-          {!isAuthPage && <SidebarNavigation tipoAcesso={session?.tipoAcesso} />}
+          {!isAuthPage && <SidebarNavigation tipoAcesso={session?.tipoAcesso} isSuperAdmin={session?.isSuperAdmin} />}
 
           <div className={cn("min-h-screen", !isAuthPage && "lg:pl-56")}>
             {!isAuthPage && session && (
@@ -62,6 +65,9 @@ export default async function RootLayout({
                 email={session.email}
                 cnpj={session.tipoAcesso === "Colaborador" ? session.cnpj : undefined}
                 salario={session.tipoAcesso === "Colaborador" ? session.salario : undefined}
+                isSuperAdmin={session.isSuperAdmin}
+                viewingAsTenantId={session.viewingAsTenantId}
+                tenants={tenantsParaSwitcher}
               />
             )}
             <main className={cn("transition-all duration-300", !isAuthPage && session && "pt-14 lg:pt-0", !isAuthPage && !session && "pt-14 lg:pt-0")}>

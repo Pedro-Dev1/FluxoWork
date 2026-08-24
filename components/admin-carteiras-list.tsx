@@ -15,8 +15,8 @@ import {
 } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { EmptyState } from "@/components/ui/empty-state"
-import { Plus, MoreVertical, Power, PowerOff, Loader2 } from "lucide-react"
-import { criarTenant, ativarTenant, desativarTenant, listarTenants } from "@/app/actions/tenants"
+import { Plus, MoreVertical, Power, PowerOff, Loader2, UserPlus } from "lucide-react"
+import { criarTenant, ativarTenant, desativarTenant, listarTenants, criarAdminInicial } from "@/app/actions/tenants"
 import { useToast } from "@/hooks/use-toast"
 
 interface Carteira {
@@ -44,6 +44,10 @@ export function AdminCarteirasList({ carteirasIniciais }: { carteirasIniciais: C
   const [nome, setNome] = useState("")
   const [slug, setSlug] = useState("")
   const [slugEditadoManualmente, setSlugEditadoManualmente] = useState(false)
+
+  const [carteiraAdmin, setCarteiraAdmin] = useState<Carteira | null>(null)
+  const [salvandoAdmin, setSalvandoAdmin] = useState(false)
+  const [adminForm, setAdminForm] = useState({ nome_completo: "", email: "", senha: "" })
 
   const recarregar = async () => {
     try {
@@ -97,6 +101,28 @@ export function AdminCarteirasList({ carteirasIniciais }: { carteirasIniciais: C
       recarregar()
     } catch {
       toast({ title: "Erro ao atualizar carteira", variant: "destructive" })
+    }
+  }
+
+  const handleCriarAdmin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!carteiraAdmin) return
+
+    setSalvandoAdmin(true)
+    try {
+      await criarAdminInicial(carteiraAdmin.id, adminForm)
+      toast({ title: `Administrador criado para ${carteiraAdmin.nome}` })
+      setCarteiraAdmin(null)
+      setAdminForm({ nome_completo: "", email: "", senha: "" })
+      recarregar()
+    } catch (error) {
+      toast({
+        title: "Erro ao criar administrador",
+        description: error instanceof Error ? error.message : "Tente novamente",
+        variant: "destructive",
+      })
+    } finally {
+      setSalvandoAdmin(false)
     }
   }
 
@@ -176,6 +202,10 @@ export function AdminCarteirasList({ carteirasIniciais }: { carteirasIniciais: C
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => setCarteiraAdmin(carteira)}>
+                      <UserPlus className="mr-2 h-4 w-4" />
+                      Criar usuário admin
+                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleToggle(carteira)}>
                       {carteira.ativo ? (
                         <>
@@ -196,6 +226,55 @@ export function AdminCarteirasList({ carteirasIniciais }: { carteirasIniciais: C
           ))}
         </div>
       )}
+
+      <Dialog open={!!carteiraAdmin} onOpenChange={(open) => !open && setCarteiraAdmin(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Criar administrador para {carteiraAdmin?.nome}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCriarAdmin} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="admin-nome">Nome completo</Label>
+              <Input
+                id="admin-nome"
+                value={adminForm.nome_completo}
+                onChange={(e) => setAdminForm((p) => ({ ...p, nome_completo: e.target.value }))}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="admin-email">E-mail</Label>
+              <Input
+                id="admin-email"
+                type="email"
+                value={adminForm.email}
+                onChange={(e) => setAdminForm((p) => ({ ...p, email: e.target.value }))}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="admin-senha">Senha</Label>
+              <Input
+                id="admin-senha"
+                type="password"
+                value={adminForm.senha}
+                onChange={(e) => setAdminForm((p) => ({ ...p, senha: e.target.value }))}
+                minLength={8}
+                required
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setCarteiraAdmin(null)}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={salvandoAdmin}>
+                {salvandoAdmin && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Criar
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

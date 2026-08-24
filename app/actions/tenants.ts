@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase-server"
 import { revalidatePath } from "next/cache"
 import { requireRole } from "@/lib/auth-utils"
 import { registrarAuditoria } from "@/lib/auditoria"
+import bcrypt from "bcryptjs"
 
 export async function obterEstatisticasAdmin() {
   await requireRole([])
@@ -130,6 +131,80 @@ export async function desativarTenant(id: string) {
   })
 
   revalidatePath("/admin/carteiras")
+}
+
+// Cria o primeiro usuário (Adm) de uma carteira recém-criada. Sem isso, uma
+// carteira nova fica sem ninguém que consiga logar e cadastrar colaboradores
+// — é o gargalo que impedia "empresa cria seus próprios usuários" de
+// funcionar de ponta a ponta.
+export async function criarAdminInicial(
+  tenantId: string,
+  dados: { nome_completo: string; email: string; senha: string },
+) {
+  const ctx = await requireRole([])
+  const supabase = await createAdminClient()
+
+  const nome = dados.nome_completo.trim()
+  const email = dados.email.trim().toLowerCase()
+
+  if (!nome) {
+    throw new Error("Nome é obrigatório")
+  }
+
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new Error("Email inválido")
+  }
+
+  if (dados.senha.length < 8) {
+    throw new Error("A senha deve ter no mínimo 8 caracteres")
+  }
+
+  const { data: tenant } = await supabase.from("tenants").select("id, nome").eq("id", tenantId).maybeSingle()
+
+  if (!tenant) {
+    throw new Error("Carteira não encontrada")
+  }
+
+  // Global de propósito — login é só por e-mail, sem seletor de carteira.
+  const { data: emailExistente } = await supabase.from("colaboradores").select("id").eq("email", email).maybeSingle()
+
+  if (emailExistente) {
+    throw new Error("Este e-mail já está cadastrado no sistema")
+  }
+
+  const senhaHash = await bcrypt.hash(dados.senha, 10)
+
+  const { data: colaborador, error } = await supabase
+    .from("colaboradores")
+    .insert({
+      nome_completo: nome,
+      email,
+      senha_hash: senhaHash,
+      tipo_acesso: "Adm",
+      salario: 0,
+      tenant_id: tenantId,
+      ativo: true,
+    })
+    .select()
+    .single()
+
+  if (error) {
+    console.error("[v0] Erro ao criar admin inicial:", error)
+    throw new Error("Erro ao criar usuário administrador")
+  }
+
+  await registrarAuditoria({
+    colaboradorId: ctx.colaboradorId,
+    tenantId,
+    acao: "admin_inicial_criado",
+    tabela: "colaboradores",
+    registroId: colaborador.id,
+    detalhes: { nome: colaborador.nome_completo, email: colaborador.email, carteira: tenant.nome },
+  })
+
+  revalidatePath("/admin/carteiras")
+  revalidatePath("/admin/usuarios")
+  return colaborador
 }
 
 export async function listarColaboradoresGlobal() {

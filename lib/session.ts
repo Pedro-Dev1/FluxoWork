@@ -10,6 +10,9 @@ export interface SessionData {
   salario?: number
   tenantId: string | null
   isSuperAdmin: boolean
+  // Só tem efeito quando isSuperAdmin é true: carteira que o Super Admin
+  // escolheu focar no momento, em vez de ver todas as carteiras juntas.
+  viewingAsTenantId?: string | null
 }
 
 export async function createSession(data: SessionData) {

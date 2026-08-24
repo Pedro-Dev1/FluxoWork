@@ -20,6 +20,7 @@ import {
   Landmark,
   ScrollText,
   Megaphone,
+  ShieldCheck,
 } from "lucide-react"
 import { logout } from "@/app/actions/auth"
 import { Button } from "@/components/ui/button"
@@ -28,6 +29,7 @@ import { contarPendencias } from "@/app/actions/contadores"
 
 interface SidebarNavigationProps {
   tipoAcesso?: string
+  isSuperAdmin?: boolean
 }
 
 interface NavItem {
@@ -43,10 +45,26 @@ interface NavGroup {
   items: NavItem[]
 }
 
-export function SidebarNavigation({ tipoAcesso }: SidebarNavigationProps) {
+export function SidebarNavigation({ tipoAcesso, isSuperAdmin }: SidebarNavigationProps) {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [pendencias, setPendencias] = useState({ aprovacoes: 0, painelFinanceiro: 0, correcoes: 0, acompanhamento: 0 })
+
+  // Aparece pra qualquer papel, sempre em cima — visível em toda página, não
+  // só num link solto no dashboard.
+  const superAdminGroup: NavGroup[] = isSuperAdmin
+    ? [
+        {
+          title: "Super Admin",
+          items: [
+            { href: "/admin", label: "Painel", icon: ShieldCheck },
+            { href: "/admin/carteiras", label: "Carteiras", icon: Building2 },
+            { href: "/admin/usuarios", label: "Usuários", icon: UsersRound },
+            { href: "/admin/auditoria", label: "Auditoria", icon: FileText },
+          ],
+        },
+      ]
+    : []
 
   useEffect(() => {
     const fetchPendencias = async () => {
@@ -63,6 +81,7 @@ export function SidebarNavigation({ tipoAcesso }: SidebarNavigationProps) {
   const getGroups = (): NavGroup[] => {
     if (tipoAcesso === "Colaborador") {
       return [
+        ...superAdminGroup,
         {
           items: [
             { href: "/meus-pagamentos", label: "Meus Pagamentos", icon: Receipt },
@@ -76,6 +95,7 @@ export function SidebarNavigation({ tipoAcesso }: SidebarNavigationProps) {
 
     if (tipoAcesso === "Supervisor") {
       return [
+        ...superAdminGroup,
         {
           items: [
             { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -103,6 +123,7 @@ export function SidebarNavigation({ tipoAcesso }: SidebarNavigationProps) {
     }
 
     const groups: NavGroup[] = [
+      ...superAdminGroup,
       {
         items: [
           { href: "/", label: "Dashboard", icon: LayoutDashboard },

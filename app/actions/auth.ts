@@ -136,6 +136,17 @@ export async function login(email: string, password: string) {
   }
 }
 
+export async function definirVisualizacaoTenant(tenantId: string | null) {
+  const session = await getSession()
+
+  if (!session?.isSuperAdmin) {
+    throw new Error("Apenas Super Admin pode trocar de carteira")
+  }
+
+  await createSession({ ...session, viewingAsTenantId: tenantId })
+  revalidatePath("/", "layout")
+}
+
 export async function logout() {
   await destroySession()
   revalidatePath("/", "layout")

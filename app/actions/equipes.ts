@@ -3,7 +3,7 @@
 import { createAdminClient } from "@/lib/supabase-server"
 import { revalidatePath } from "next/cache"
 import type { Equipe, NovaEquipe } from "@/types/equipe"
-import { requireAuth, requireRole, scopeToTenant } from "@/lib/auth-utils"
+import { requireAuth, requireRole, scopeToTenant, type AuthContext } from "@/lib/auth-utils"
 
 export async function listarEquipes(): Promise<Equipe[]> {
   const ctx = await requireAuth()
@@ -146,7 +146,10 @@ export async function listarColaboradoresPorEquipe(equipeId: string) {
   return data || []
 }
 
-async function verificarEquipeNoTenant(equipeId: string, ctx: { tenantId: string | null; isSuperAdmin: boolean }) {
+async function verificarEquipeNoTenant(
+  equipeId: string,
+  ctx: Pick<AuthContext, "tenantId" | "isSuperAdmin" | "viewingAsTenantId">,
+) {
   const supabase = await createAdminClient()
   const { data } = await scopeToTenant(supabase.from("equipes").select("id").eq("id", equipeId), ctx).maybeSingle()
   return !!data

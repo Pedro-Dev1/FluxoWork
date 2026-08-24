@@ -4,15 +4,27 @@ import { User, Eye, EyeOff } from "lucide-react"
 import { useValoresVisibility } from "@/contexts/valores-visibility-context"
 import { Button } from "@/components/ui/button"
 import { NotificacoesBell } from "@/components/notificacoes-bell"
+import { TenantSwitcher } from "@/components/tenant-switcher"
 
 interface UserHeaderProps {
   nomeCompleto: string
   email: string
   cnpj?: string
   salario?: number
+  isSuperAdmin?: boolean
+  viewingAsTenantId?: string | null
+  tenants?: { id: string; nome: string }[]
 }
 
-export function UserHeader({ nomeCompleto, email, cnpj, salario }: UserHeaderProps) {
+export function UserHeader({
+  nomeCompleto,
+  email,
+  cnpj,
+  salario,
+  isSuperAdmin,
+  viewingAsTenantId,
+  tenants,
+}: UserHeaderProps) {
   const { valoresVisiveis, toggleValoresVisiveis, mascararValor } = useValoresVisibility()
 
   return (
@@ -37,6 +49,8 @@ export function UserHeader({ nomeCompleto, email, cnpj, salario }: UserHeaderPro
             </span>
           )}
         </div>
+
+        {isSuperAdmin && <TenantSwitcher tenants={tenants || []} viewingAsTenantId={viewingAsTenantId ?? null} />}
 
         <NotificacoesBell />
 

@@ -1497,7 +1497,10 @@ export async function marcarPedidoPago(pedidoId: string) {
 
 const DIAS_PARA_EXPIRAR_SEM_NOTA = 15
 
-async function expirarPedidosSemNotaAntigos(supabase: any, ctx: Pick<AuthContext, "tenantId" | "isSuperAdmin">) {
+async function expirarPedidosSemNotaAntigos(
+  supabase: any,
+  ctx: Pick<AuthContext, "tenantId" | "isSuperAdmin" | "viewingAsTenantId">,
+) {
   const cutoff = new Date()
   cutoff.setDate(cutoff.getDate() - DIAS_PARA_EXPIRAR_SEM_NOTA)
 
