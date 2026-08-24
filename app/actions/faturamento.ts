@@ -89,7 +89,7 @@ export async function reenviarEmailFatura(faturaId: string) {
     throw new Error("Fatura não encontrada")
   }
 
-  if (!fatura.boleto_url || !fatura.boleto_linha_digitavel) {
+  if (!fatura.boleto_url && !fatura.boleto_linha_digitavel) {
     throw new Error("Esta fatura ainda não tem um boleto emitido")
   }
 

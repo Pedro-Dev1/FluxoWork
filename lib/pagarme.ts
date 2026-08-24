@@ -37,9 +37,9 @@ export async function criarPedidoBoleto(params: {
       success: true
       orderId: string
       chargeId: string
-      boletoUrl: string
-      boletoLinha: string
-      boletoCodigoBarras: string
+      boletoUrl: string | null
+      boletoLinha: string | null
+      boletoCodigoBarras: string | null
     }
   | { success: false; error: string }
 > {
@@ -125,20 +125,35 @@ export async function criarPedidoBoleto(params: {
     }
 
     const charge = data.charges?.[0]
-    const boleto = charge?.last_transaction
+    const transacao = charge?.last_transaction
+    const boletoUrl: string | null = transacao?.url || transacao?.pdf || null
+    const boletoLinha: string | null = transacao?.line || null
+    const boletoCodigoBarras: string | null = transacao?.barcode || null
 
-    if (!charge || !boleto?.url) {
+    // A Pagar.me pode não devolver a URL de visualização mas ainda assim
+    // gerar uma linha digitável/código de barras válido — isso já é um
+    // boleto utilizável, mesmo sem link clicável. Só trata como falha
+    // quando NENHUM dado de cobrança volta.
+    if (!charge || (!boletoUrl && !boletoLinha && !boletoCodigoBarras)) {
+      const motivoGateway =
+        transacao?.gateway_response?.errors?.[0]?.message || transacao?.acquirer_message || null
+      const diagnostico = `Pedido ${data.id || "?"} (status ${data.status || "?"}), cobrança ${charge?.status || "ausente"}${
+        motivoGateway ? `, motivo: ${motivoGateway}` : `, campos da transação: ${transacao ? Object.keys(transacao).join(", ") : "nenhuma transação"}`
+      }`
       console.error("[v0] Resposta da Pagar.me sem dados de boleto:", data)
-      return { success: false, error: "Pedido criado, mas a Pagar.me não retornou os dados do boleto." }
+      return {
+        success: false,
+        error: `Pedido criado, mas a Pagar.me não retornou os dados do boleto. ${diagnostico}`,
+      }
     }
 
     return {
       success: true,
       orderId: data.id,
       chargeId: charge.id,
-      boletoUrl: boleto.url,
-      boletoLinha: boleto.line,
-      boletoCodigoBarras: boleto.barcode,
+      boletoUrl,
+      boletoLinha,
+      boletoCodigoBarras,
     }
   } catch (error) {
     console.error("[v0] Erro inesperado ao chamar a Pagar.me:", error)

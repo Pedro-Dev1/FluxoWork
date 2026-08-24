@@ -326,13 +326,15 @@ export function AdminFaturamentoList({
                       )}
                     </TableCell>
                     <TableCell className="text-right">
-                      {fatura.boleto_url ? (
+                      {fatura.pagarme_charge_id ? (
                         <div className="flex items-center justify-end gap-1">
-                          <Button variant="ghost" size="icon" asChild>
-                            <a href={fatura.boleto_url} target="_blank" rel="noopener noreferrer" title="Ver boleto">
-                              <ExternalLink className="h-4 w-4" />
-                            </a>
-                          </Button>
+                          {fatura.boleto_url && (
+                            <Button variant="ghost" size="icon" asChild>
+                              <a href={fatura.boleto_url} target="_blank" rel="noopener noreferrer" title="Ver boleto">
+                                <ExternalLink className="h-4 w-4" />
+                              </a>
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="icon"
