@@ -87,7 +87,11 @@ export function AdminUsuariosList({
   const confirmarPromover = async () => {
     if (!promoverAlvo) return
     try {
-      await promoverSuperAdmin(promoverAlvo.id)
+      const resultado = await promoverSuperAdmin(promoverAlvo.id)
+      if (!resultado.success) {
+        toast({ title: "Erro ao promover", description: resultado.error, variant: "destructive" })
+        return
+      }
       toast({ title: `${promoverAlvo.nome_completo} agora é Super Admin` })
       recarregar()
     } catch (error) {
@@ -104,7 +108,11 @@ export function AdminUsuariosList({
   const confirmarRevogar = async () => {
     if (!revogarAlvo || !tenantDestino) return
     try {
-      await revogarSuperAdmin(revogarAlvo.id, tenantDestino)
+      const resultado = await revogarSuperAdmin(revogarAlvo.id, tenantDestino)
+      if (!resultado.success) {
+        toast({ title: "Erro ao revogar", description: resultado.error, variant: "destructive" })
+        return
+      }
       toast({ title: `Super Admin revogado de ${revogarAlvo.nome_completo}` })
       recarregar()
     } catch (error) {

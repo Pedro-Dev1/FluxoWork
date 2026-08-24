@@ -73,7 +73,11 @@ export function AdminCarteirasList({ carteirasIniciais }: { carteirasIniciais: C
 
     setSalvando(true)
     try {
-      await criarTenant({ nome, slug })
+      const resultado = await criarTenant({ nome, slug })
+      if (!resultado.success) {
+        toast({ title: "Erro ao criar carteira", description: resultado.error, variant: "destructive" })
+        return
+      }
       toast({ title: "Carteira criada" })
       setOpen(false)
       setNome("")
@@ -93,13 +97,12 @@ export function AdminCarteirasList({ carteirasIniciais }: { carteirasIniciais: C
 
   const handleToggle = async (carteira: Carteira) => {
     try {
-      if (carteira.ativo) {
-        await desativarTenant(carteira.id)
-        toast({ title: "Carteira desativada" })
-      } else {
-        await ativarTenant(carteira.id)
-        toast({ title: "Carteira ativada" })
+      const resultado = carteira.ativo ? await desativarTenant(carteira.id) : await ativarTenant(carteira.id)
+      if (!resultado.success) {
+        toast({ title: "Erro ao atualizar carteira", description: resultado.error, variant: "destructive" })
+        return
       }
+      toast({ title: carteira.ativo ? "Carteira desativada" : "Carteira ativada" })
       recarregar()
     } catch {
       toast({ title: "Erro ao atualizar carteira", variant: "destructive" })
@@ -112,7 +115,11 @@ export function AdminCarteirasList({ carteirasIniciais }: { carteirasIniciais: C
 
     setSalvandoAdmin(true)
     try {
-      await criarAdminInicial(carteiraAdmin.id, adminForm)
+      const resultado = await criarAdminInicial(carteiraAdmin.id, adminForm)
+      if (!resultado.success) {
+        toast({ title: "Erro ao criar administrador", description: resultado.error, variant: "destructive" })
+        return
+      }
       toast({ title: `Administrador criado para ${carteiraAdmin.nome}` })
       setCarteiraAdmin(null)
       setAdminForm({ nome_completo: "", email: "", senha: "" })

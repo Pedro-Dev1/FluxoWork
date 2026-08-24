@@ -6,6 +6,13 @@ import { requireRole } from "@/lib/auth-utils"
 import { registrarAuditoria } from "@/lib/auditoria"
 import bcrypt from "bcryptjs"
 
+// Next.js redige a mensagem de qualquer erro lançado (throw) de dentro de
+// uma Server Action quando ela é chamada por um Client Component em
+// produção — o cliente só recebe um texto genérico ("An error occurred in
+// the Server Components render...") e um digest, não a mensagem real. Por
+// isso toda mutação abaixo que pode falhar de forma esperada (validação,
+// duplicidade, etc.) RETORNA {success:false, error} em vez de lançar.
+
 export async function obterEstatisticasAdmin() {
   await requireRole([])
   const supabase = await createAdminClient()
@@ -48,7 +55,9 @@ export async function listarTenants() {
   return (tenants || []).map((t) => ({ ...t, total_colaboradores: contagemPorTenant.get(t.id) || 0 }))
 }
 
-export async function criarTenant(dados: { nome: string; slug: string }) {
+export async function criarTenant(
+  dados: { nome: string; slug: string },
+): Promise<{ success: true; data: { id: string; nome: string; slug: string } } | { success: false; error: string }> {
   const ctx = await requireRole([])
   const supabase = await createAdminClient()
 
@@ -56,13 +65,13 @@ export async function criarTenant(dados: { nome: string; slug: string }) {
   const slug = dados.slug.trim().toLowerCase()
 
   if (!nome || !slug) {
-    throw new Error("Nome e identificador são obrigatórios")
+    return { success: false, error: "Nome e identificador são obrigatórios" }
   }
 
   const { data: existente } = await supabase.from("tenants").select("id").ilike("slug", slug).maybeSingle()
 
   if (existente) {
-    throw new Error("Já existe uma carteira com esse identificador")
+    return { success: false, error: "Já existe uma carteira com esse identificador" }
   }
 
   const { data, error } = await supabase
@@ -73,7 +82,7 @@ export async function criarTenant(dados: { nome: string; slug: string }) {
 
   if (error) {
     console.error("[v0] Erro ao criar carteira:", error)
-    throw new Error("Erro ao criar carteira")
+    return { success: false, error: "Erro ao criar carteira" }
   }
 
   await registrarAuditoria({
@@ -86,10 +95,10 @@ export async function criarTenant(dados: { nome: string; slug: string }) {
   })
 
   revalidatePath("/admin/carteiras")
-  return data
+  return { success: true, data }
 }
 
-export async function ativarTenant(id: string) {
+export async function ativarTenant(id: string): Promise<{ success: true } | { success: false; error: string }> {
   const ctx = await requireRole([])
   const supabase = await createAdminClient()
 
@@ -97,7 +106,7 @@ export async function ativarTenant(id: string) {
 
   if (error) {
     console.error("[v0] Erro ao ativar carteira:", error)
-    throw new Error("Erro ao ativar carteira")
+    return { success: false, error: "Erro ao ativar carteira" }
   }
 
   await registrarAuditoria({
@@ -109,9 +118,10 @@ export async function ativarTenant(id: string) {
   })
 
   revalidatePath("/admin/carteiras")
+  return { success: true }
 }
 
-export async function desativarTenant(id: string) {
+export async function desativarTenant(id: string): Promise<{ success: true } | { success: false; error: string }> {
   const ctx = await requireRole([])
   const supabase = await createAdminClient()
 
@@ -119,7 +129,7 @@ export async function desativarTenant(id: string) {
 
   if (error) {
     console.error("[v0] Erro ao desativar carteira:", error)
-    throw new Error("Erro ao desativar carteira")
+    return { success: false, error: "Erro ao desativar carteira" }
   }
 
   await registrarAuditoria({
@@ -131,6 +141,7 @@ export async function desativarTenant(id: string) {
   })
 
   revalidatePath("/admin/carteiras")
+  return { success: true }
 }
 
 // Cria o primeiro usuário (Adm) de uma carteira recém-criada. Sem isso, uma
@@ -140,7 +151,7 @@ export async function desativarTenant(id: string) {
 export async function criarAdminInicial(
   tenantId: string,
   dados: { nome_completo: string; email: string; senha: string },
-) {
+): Promise<{ success: true } | { success: false; error: string }> {
   const ctx = await requireRole([])
   const supabase = await createAdminClient()
 
@@ -148,28 +159,28 @@ export async function criarAdminInicial(
   const email = dados.email.trim().toLowerCase()
 
   if (!nome) {
-    throw new Error("Nome é obrigatório")
+    return { success: false, error: "Nome é obrigatório" }
   }
 
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    throw new Error("Email inválido")
+    return { success: false, error: "Email inválido" }
   }
 
   if (dados.senha.length < 8) {
-    throw new Error("A senha deve ter no mínimo 8 caracteres")
+    return { success: false, error: "A senha deve ter no mínimo 8 caracteres" }
   }
 
   const { data: tenant } = await supabase.from("tenants").select("id, nome").eq("id", tenantId).maybeSingle()
 
   if (!tenant) {
-    throw new Error("Carteira não encontrada")
+    return { success: false, error: "Carteira não encontrada" }
   }
 
   // Global de propósito — login é só por e-mail, sem seletor de carteira.
   const { data: emailExistente } = await supabase.from("colaboradores").select("id").eq("email", email).maybeSingle()
 
   if (emailExistente) {
-    throw new Error("Este e-mail já está cadastrado no sistema")
+    return { success: false, error: "Este e-mail já está cadastrado no sistema" }
   }
 
   const senhaHash = await bcrypt.hash(dados.senha, 10)
@@ -190,7 +201,7 @@ export async function criarAdminInicial(
 
   if (error) {
     console.error("[v0] Erro ao criar admin inicial:", error)
-    throw new Error("Erro ao criar usuário administrador")
+    return { success: false, error: "Erro ao criar usuário administrador" }
   }
 
   await registrarAuditoria({
@@ -204,7 +215,7 @@ export async function criarAdminInicial(
 
   revalidatePath("/admin/carteiras")
   revalidatePath("/admin/usuarios")
-  return colaborador
+  return { success: true }
 }
 
 export async function listarColaboradoresGlobal() {
@@ -243,7 +254,9 @@ export async function listarSuperAdmins() {
   return data || []
 }
 
-export async function promoverSuperAdmin(colaboradorId: string) {
+export async function promoverSuperAdmin(
+  colaboradorId: string,
+): Promise<{ success: true } | { success: false; error: string }> {
   const ctx = await requireRole([])
   const supabase = await createAdminClient()
 
@@ -254,10 +267,10 @@ export async function promoverSuperAdmin(colaboradorId: string) {
     .maybeSingle()
 
   if (fetchError || !alvo) {
-    throw new Error("Colaborador não encontrado")
+    return { success: false, error: "Colaborador não encontrado" }
   }
 
-  if (alvo.is_super_admin) return
+  if (alvo.is_super_admin) return { success: true }
 
   const { error } = await supabase
     .from("colaboradores")
@@ -266,7 +279,7 @@ export async function promoverSuperAdmin(colaboradorId: string) {
 
   if (error) {
     console.error("[v0] Erro ao promover Super Admin:", error)
-    throw new Error("Erro ao promover a Super Admin")
+    return { success: false, error: "Erro ao promover a Super Admin" }
   }
 
   await registrarAuditoria({
@@ -279,9 +292,13 @@ export async function promoverSuperAdmin(colaboradorId: string) {
   })
 
   revalidatePath("/admin/usuarios")
+  return { success: true }
 }
 
-export async function revogarSuperAdmin(colaboradorId: string, novoTenantId: string) {
+export async function revogarSuperAdmin(
+  colaboradorId: string,
+  novoTenantId: string,
+): Promise<{ success: true } | { success: false; error: string }> {
   const ctx = await requireRole([])
   const supabase = await createAdminClient()
 
@@ -291,7 +308,7 @@ export async function revogarSuperAdmin(colaboradorId: string, novoTenantId: str
     .eq("is_super_admin", true)
 
   if ((count || 0) <= 1) {
-    throw new Error("Não é possível revogar o último Super Admin do sistema")
+    return { success: false, error: "Não é possível revogar o último Super Admin do sistema" }
   }
 
   const { data: alvo, error: fetchError } = await supabase
@@ -302,13 +319,13 @@ export async function revogarSuperAdmin(colaboradorId: string, novoTenantId: str
     .maybeSingle()
 
   if (fetchError || !alvo) {
-    throw new Error("Colaborador não encontrado")
+    return { success: false, error: "Colaborador não encontrado" }
   }
 
   const { data: tenantDestino } = await supabase.from("tenants").select("id").eq("id", novoTenantId).maybeSingle()
 
   if (!tenantDestino) {
-    throw new Error("Carteira de destino não encontrada")
+    return { success: false, error: "Carteira de destino não encontrada" }
   }
 
   const { error } = await supabase
@@ -318,7 +335,7 @@ export async function revogarSuperAdmin(colaboradorId: string, novoTenantId: str
 
   if (error) {
     console.error("[v0] Erro ao revogar Super Admin:", error)
-    throw new Error("Erro ao revogar Super Admin")
+    return { success: false, error: "Erro ao revogar Super Admin" }
   }
 
   await registrarAuditoria({
@@ -331,6 +348,7 @@ export async function revogarSuperAdmin(colaboradorId: string, novoTenantId: str
   })
 
   revalidatePath("/admin/usuarios")
+  return { success: true }
 }
 
 export async function listarAuditoria(limite = 100) {

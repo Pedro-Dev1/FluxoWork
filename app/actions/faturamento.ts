@@ -19,19 +19,31 @@ export async function listarConfiguracaoFaturamento(): Promise<CarteiraFaturamen
   return listarCarteirasFaturamento()
 }
 
-export async function atualizarConfiguracaoFaturamento(tenantId: string, dados: DadosFaturamento) {
+// Next.js redige a mensagem de qualquer erro lançado (throw) de dentro de
+// uma Server Action em produção — o cliente só recebe um texto genérico
+// ("An error occurred in the Server Components render...") e um digest, não
+// a mensagem real. Por isso toda ação daqui pra baixo que pode falhar de
+// forma esperada (validação, Pagar.me recusando, etc.) RETORNA
+// {success:false, error} em vez de lançar — só assim a mensagem específica
+// chega no toast do usuário.
+type ResultadoAcao = { success: true } | { success: false; error: string }
+
+export async function atualizarConfiguracaoFaturamento(
+  tenantId: string,
+  dados: DadosFaturamento,
+): Promise<ResultadoAcao> {
   const ctx = await requireRole([])
 
   const resultado = await atualizarFaturamentoTenant({ tenantId }, dados, ctx.colaboradorId)
 
   revalidatePath("/admin/faturamento")
 
-  if (!resultado.success) {
-    throw new Error(resultado.error)
-  }
+  return resultado.success ? { success: true } : { success: false, error: resultado.error }
 }
 
-export async function gerarFaturaManual(tenantId: string) {
+export async function gerarFaturaManual(
+  tenantId: string,
+): Promise<{ success: true; fatura: FaturaPlataforma } | { success: false; error: string }> {
   const ctx = await requireRole([])
 
   const agora = new Date()
@@ -40,14 +52,14 @@ export async function gerarFaturaManual(tenantId: string) {
   revalidatePath("/admin/faturamento")
 
   if (!resultado.success) {
-    throw new Error(resultado.error)
+    return { success: false, error: resultado.error }
   }
 
   if (resultado.jaExistia) {
-    throw new Error("Já existe uma fatura para esta carteira no mês corrente.")
+    return { success: false, error: "Já existe uma fatura para esta carteira no mês corrente." }
   }
 
-  return resultado.fatura
+  return { success: true, fatura: resultado.fatura }
 }
 
 export async function listarFaturasPlataforma(tenantId?: string): Promise<
@@ -104,7 +116,7 @@ export async function listarFaturasPlataformaDoTenant(): Promise<FaturaPlataform
   return (data || []) as FaturaPlataforma[]
 }
 
-export async function reenviarEmailFatura(faturaId: string) {
+export async function reenviarEmailFatura(faturaId: string): Promise<ResultadoAcao> {
   await requireRole([])
   const supabase = await createAdminClient()
 
@@ -115,16 +127,16 @@ export async function reenviarEmailFatura(faturaId: string) {
     .maybeSingle()
 
   if (error || !fatura) {
-    throw new Error("Fatura não encontrada")
+    return { success: false, error: "Fatura não encontrada" }
   }
 
   if (!fatura.boleto_url && !fatura.boleto_linha_digitavel) {
-    throw new Error("Esta fatura ainda não tem um boleto emitido")
+    return { success: false, error: "Esta fatura ainda não tem um boleto emitido" }
   }
 
   const emailDestino = await resolverEmailCobranca(fatura.tenant_id, fatura.tenant?.email_faturamento || null)
   if (!emailDestino) {
-    throw new Error("Esta carteira não tem e-mail de cobrança configurado nem um Adm ativo com e-mail")
+    return { success: false, error: "Esta carteira não tem e-mail de cobrança configurado nem um Adm ativo com e-mail" }
   }
 
   await enviarEmailFaturaPlataforma({
@@ -139,16 +151,16 @@ export async function reenviarEmailFatura(faturaId: string) {
     boletoUrl: fatura.boleto_url,
     boletoLinha: fatura.boleto_linha_digitavel,
   })
+
+  return { success: true }
 }
 
-export async function cancelarFaturaPlataforma(faturaId: string) {
+export async function cancelarFaturaPlataforma(faturaId: string): Promise<ResultadoAcao> {
   const ctx = await requireRole([])
 
   const resultado = await cancelarFatura(faturaId, ctx.colaboradorId)
 
   revalidatePath("/admin/faturamento")
 
-  if (!resultado.success) {
-    throw new Error(resultado.error)
-  }
+  return resultado
 }

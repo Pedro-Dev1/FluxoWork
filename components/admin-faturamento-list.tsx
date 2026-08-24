@@ -135,7 +135,7 @@ export function AdminFaturamentoList({
 
     setSalvandoConfig(true)
     try {
-      await atualizarConfiguracaoFaturamento(carteiraConfig.id, {
+      const resultado = await atualizarConfiguracaoFaturamento(carteiraConfig.id, {
         valorPorUsuarioAtivo: Number(form.valorPorUsuarioAtivo),
         diaFaturamento: Number(form.diaFaturamento),
         documento: form.documento,
@@ -147,6 +147,10 @@ export function AdminFaturamentoList({
         enderecoCidade: form.enderecoCidade,
         enderecoUf: form.enderecoUf,
       })
+      if (!resultado.success) {
+        toast({ title: "Erro ao salvar configuração", description: resultado.error, variant: "destructive" })
+        return
+      }
       toast({ title: "Faturamento configurado" })
       setCarteiraConfig(null)
       recarregar()
@@ -165,7 +169,11 @@ export function AdminFaturamentoList({
     if (!carteiraGerar) return
     setGerando(true)
     try {
-      await gerarFaturaManual(carteiraGerar.id)
+      const resultado = await gerarFaturaManual(carteiraGerar.id)
+      if (!resultado.success) {
+        toast({ title: "Erro ao gerar fatura", description: resultado.error, variant: "destructive" })
+        return
+      }
       toast({ title: `Fatura gerada para ${carteiraGerar.nome}` })
       setCarteiraGerar(null)
       recarregar()
@@ -183,7 +191,11 @@ export function AdminFaturamentoList({
   const handleReenviar = async (faturaId: string) => {
     setReenviando(faturaId)
     try {
-      await reenviarEmailFatura(faturaId)
+      const resultado = await reenviarEmailFatura(faturaId)
+      if (!resultado.success) {
+        toast({ title: "Erro ao reenviar e-mail", description: resultado.error, variant: "destructive" })
+        return
+      }
       toast({ title: "E-mail reenviado" })
     } catch (error) {
       toast({
@@ -200,7 +212,11 @@ export function AdminFaturamentoList({
     if (!faturaCancelar) return
     setCancelando(true)
     try {
-      await cancelarFaturaPlataforma(faturaCancelar.id)
+      const resultado = await cancelarFaturaPlataforma(faturaCancelar.id)
+      if (!resultado.success) {
+        toast({ title: "Erro ao cancelar fatura", description: resultado.error, variant: "destructive" })
+        return
+      }
       toast({ title: "Fatura cancelada" })
       setFaturaCancelar(null)
       recarregar()
