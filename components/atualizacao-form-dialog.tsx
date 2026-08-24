@@ -63,7 +63,7 @@ export function AtualizacaoFormDialog({ open, onOpenChange, atualizacao, onSaved
     cta_url: "",
     destaque: false,
     exibir_na_plataforma: true,
-    enviar_email: false,
+    enviar_email: true,
     publish_at: null,
     expires_at: null,
     tenant_id: null,
