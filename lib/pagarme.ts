@@ -41,11 +41,12 @@ export async function criarPedidoBoleto(params: {
     return { success: false, error: "Integração com a Pagar.me não configurada (PAGARME_SECRET_KEY ausente)." }
   }
 
+  // Opcional: contas PSP (como a desta integração) não escolhem banco
+  // emissor — a Pagar.me define isso pelas prioridades pré-configuradas na
+  // loja quando o campo não é enviado. Só existe pra permitir direcionar
+  // pra um banco específico se um dia for preciso; sem a env var, o campo
+  // simplesmente não entra no corpo da requisição.
   const bank = process.env.PAGARME_BOLETO_BANK
-  if (!bank) {
-    console.error("[v0] PAGARME_BOLETO_BANK não configurada — boleto não emitido.")
-    return { success: false, error: "Banco emissor do boleto não configurado (PAGARME_BOLETO_BANK ausente)." }
-  }
 
   const documento = params.customerDocument.replace(/\D/g, "")
 
@@ -79,7 +80,7 @@ export async function criarPedidoBoleto(params: {
       {
         payment_method: "boleto",
         boleto: {
-          bank,
+          ...(bank ? { bank } : {}),
           instructions: params.instructions,
           due_at: params.dataVencimento,
         },
