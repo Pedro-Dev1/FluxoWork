@@ -56,7 +56,13 @@ export default async function RootLayout({
       <body className="antialiased bg-background">
         <Toaster richColors position="top-right" />
         <ValoresVisibilityProvider>
-          {!isAuthPage && <SidebarNavigation tipoAcesso={session?.tipoAcesso} isSuperAdmin={session?.isSuperAdmin} />}
+          {!isAuthPage && (
+            <SidebarNavigation
+              tipoAcesso={session?.tipoAcesso}
+              isSuperAdmin={session?.isSuperAdmin}
+              viewingAsTenantId={session?.viewingAsTenantId}
+            />
+          )}
 
           <div className={cn("min-h-screen", !isAuthPage && "lg:pl-56")}>
             {!isAuthPage && session && (

@@ -1,6 +1,7 @@
 import { listarAuditoria } from "@/app/actions/tenants"
 import { EmptyState } from "@/components/ui/empty-state"
 import { AdminErroCarregamento } from "@/components/admin-erro-carregamento"
+import { ehErroDeControleDoNext } from "@/lib/next-render-errors"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -25,6 +26,7 @@ export default async function AdminAuditoriaPage() {
   try {
     registros = await listarAuditoria()
   } catch (error) {
+    if (ehErroDeControleDoNext(error)) throw error
     console.error("[v0] Erro ao carregar /admin/auditoria:", error)
     return <AdminErroCarregamento mensagem={error instanceof Error ? error.message : undefined} />
   }

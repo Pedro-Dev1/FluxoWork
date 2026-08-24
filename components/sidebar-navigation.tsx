@@ -30,6 +30,7 @@ import { contarPendencias } from "@/app/actions/contadores"
 interface SidebarNavigationProps {
   tipoAcesso?: string
   isSuperAdmin?: boolean
+  viewingAsTenantId?: string | null
 }
 
 interface NavItem {
@@ -45,7 +46,7 @@ interface NavGroup {
   items: NavItem[]
 }
 
-export function SidebarNavigation({ tipoAcesso, isSuperAdmin }: SidebarNavigationProps) {
+export function SidebarNavigation({ tipoAcesso, isSuperAdmin, viewingAsTenantId }: SidebarNavigationProps) {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [pendencias, setPendencias] = useState({ aprovacoes: 0, painelFinanceiro: 0, correcoes: 0, acompanhamento: 0 })
@@ -79,6 +80,15 @@ export function SidebarNavigation({ tipoAcesso, isSuperAdmin }: SidebarNavigatio
   }, [])
 
   const getGroups = (): NavGroup[] => {
+    // Super Admin sem carteira escolhida no seletor = visão de controle da
+    // plataforma, sem o menu operacional de uma empresa específica
+    // misturado. O menu de Pedidos/Financeiro/Gestão só faz sentido quando
+    // "ver como" está apontando pra uma carteira — aí sim ele opera como se
+    // fosse o Adm daquela empresa.
+    if (isSuperAdmin && !viewingAsTenantId) {
+      return superAdminGroup
+    }
+
     if (tipoAcesso === "Colaborador") {
       return [
         ...superAdminGroup,

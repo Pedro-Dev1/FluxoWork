@@ -1,12 +1,14 @@
 import { Card, CardContent } from "@/components/ui/card"
 import { obterEstatisticasAdmin } from "@/app/actions/tenants"
 import { AdminErroCarregamento } from "@/components/admin-erro-carregamento"
+import { ehErroDeControleDoNext } from "@/lib/next-render-errors"
 
 export default async function AdminOverviewPage() {
   let stats: { totalCarteiras: number; totalColaboradores: number; totalSuperAdmins: number }
   try {
     stats = await obterEstatisticasAdmin()
   } catch (error) {
+    if (ehErroDeControleDoNext(error)) throw error
     console.error("[v0] Erro ao carregar /admin:", error)
     return <AdminErroCarregamento mensagem={error instanceof Error ? error.message : undefined} />
   }
