@@ -3,7 +3,7 @@ import { criarPedidoBoleto, cancelarCobranca } from "./pagarme"
 import { enviarEmailFaturaPlataforma } from "./email"
 import { registrarAuditoria } from "./auditoria"
 import { criarNotificacaoTransacional } from "./notificacoes"
-import type { FaturaPlataforma } from "@/types/fatura-plataforma"
+import type { CarteiraFaturamento, FaturaPlataforma } from "@/types/fatura-plataforma"
 
 // Sem "use server" de propósito, mesmo motivo de lib/notificacoes.ts e
 // lib/auditoria.ts: gerarFaturaParaTenant() não valida permissão sozinha —
@@ -45,6 +45,140 @@ export async function resolverEmailCobranca(tenantId: string, emailFaturamento: 
     .maybeSingle()
 
   return admin?.email || null
+}
+
+export type DadosFaturamento = {
+  valorPorUsuarioAtivo: number
+  diaFaturamento: number
+  documento: string
+  emailFaturamento?: string | null
+  telefoneFaturamento?: string | null
+  enderecoLogradouro: string
+  enderecoComplemento?: string | null
+  enderecoCep: string
+  enderecoCidade: string
+  enderecoUf: string
+}
+
+// Núcleo compartilhado entre o Server Action (app/actions/faturamento.ts,
+// depois de requireRole([])) e a API de faturamento (app/api/admin/faturamento,
+// depois de validar a API key) — mesma validação e mesma escrita nos dois
+// casos, só muda quem valida a permissão antes de chegar aqui.
+export async function atualizarFaturamentoTenant(
+  identificador: { tenantId?: string; slug?: string },
+  dados: DadosFaturamento,
+  acionadoPor: string | null,
+): Promise<{ success: true; tenantId: string; nome: string } | { success: false; error: string }> {
+  if (dados.valorPorUsuarioAtivo <= 0) {
+    return { success: false, error: "O valor por usuário ativo deve ser maior que zero" }
+  }
+
+  if (dados.diaFaturamento < 1 || dados.diaFaturamento > 28) {
+    return { success: false, error: "O dia de faturamento deve estar entre 1 e 28" }
+  }
+
+  const documento = dados.documento.replace(/\D/g, "")
+  if (documento.length !== 14) {
+    return { success: false, error: "CNPJ inválido" }
+  }
+
+  if (!dados.enderecoLogradouro.trim() || !dados.enderecoCidade.trim() || !dados.enderecoUf.trim()) {
+    return {
+      success: false,
+      error: "Endereço (logradouro, cidade e UF) é obrigatório — exigido pela Pagar.me para emitir boleto",
+    }
+  }
+
+  const cep = dados.enderecoCep.replace(/\D/g, "")
+  if (cep.length !== 8) {
+    return { success: false, error: "CEP inválido" }
+  }
+
+  if (dados.enderecoUf.trim().length !== 2) {
+    return { success: false, error: "UF inválida — use a sigla de 2 letras" }
+  }
+
+  if (!identificador.tenantId && !identificador.slug) {
+    return { success: false, error: "Informe tenantId ou slug da carteira" }
+  }
+
+  const supabase = await createAdminClient()
+
+  let query = supabase.from("tenants").update({
+    valor_por_usuario_ativo: dados.valorPorUsuarioAtivo,
+    dia_faturamento: dados.diaFaturamento,
+    documento,
+    email_faturamento: dados.emailFaturamento?.trim() || null,
+    telefone_faturamento: dados.telefoneFaturamento?.trim() || null,
+    endereco_logradouro: dados.enderecoLogradouro.trim(),
+    endereco_complemento: dados.enderecoComplemento?.trim() || null,
+    endereco_cep: cep,
+    endereco_cidade: dados.enderecoCidade.trim(),
+    endereco_uf: dados.enderecoUf.trim().toUpperCase(),
+  })
+
+  query = identificador.tenantId ? query.eq("id", identificador.tenantId) : query.eq("slug", identificador.slug!)
+
+  const { data: tenant, error } = await query.select("id, nome").maybeSingle()
+
+  if (error) {
+    console.error("[v0] Erro ao atualizar configuração de faturamento:", error)
+    return { success: false, error: "Erro ao atualizar configuração de faturamento" }
+  }
+
+  if (!tenant) {
+    return { success: false, error: "Carteira não encontrada" }
+  }
+
+  await registrarAuditoria({
+    colaboradorId: acionadoPor,
+    tenantId: tenant.id,
+    acao: "faturamento_configurado",
+    tabela: "tenants",
+    registroId: tenant.id,
+    detalhes: {
+      carteira: tenant.nome,
+      valor_por_usuario_ativo: dados.valorPorUsuarioAtivo,
+      dia_faturamento: dados.diaFaturamento,
+      origem: acionadoPor ? "painel" : "api",
+    },
+  })
+
+  return { success: true, tenantId: tenant.id, nome: tenant.nome }
+}
+
+// Mesma lógica de contagem de usuários ativos usada em
+// app/actions/tenants.ts::listarTenants(), mas com o filtro adicional de
+// "ativo" (aqui interessa quem realmente entra na conta da próxima fatura,
+// não o total histórico de colaboradores).
+export async function listarCarteirasFaturamento(): Promise<CarteiraFaturamento[]> {
+  const supabase = await createAdminClient()
+
+  const { data: tenants, error } = await supabase
+    .from("tenants")
+    .select(
+      "id, nome, ativo, valor_por_usuario_ativo, dia_faturamento, documento, email_faturamento, telefone_faturamento, endereco_logradouro, endereco_complemento, endereco_cep, endereco_cidade, endereco_uf",
+    )
+    .order("nome", { ascending: true })
+
+  if (error) {
+    console.error("[v0] Erro ao listar configuração de faturamento:", error)
+    throw new Error("Erro ao listar configuração de faturamento")
+  }
+
+  const { data: colaboradores } = await supabase
+    .from("colaboradores")
+    .select("tenant_id")
+    .eq("ativo", true)
+    .eq("is_super_admin", false)
+    .not("tenant_id", "is", null)
+
+  const contagemPorTenant = new Map<string, number>()
+  for (const c of colaboradores || []) {
+    contagemPorTenant.set(c.tenant_id, (contagemPorTenant.get(c.tenant_id) || 0) + 1)
+  }
+
+  return (tenants || []).map((t) => ({ ...t, usuarios_ativos: contagemPorTenant.get(t.id) || 0 })) as CarteiraFaturamento[]
 }
 
 // Cancela uma fatura ainda não paga (boleto emitido, aguardando pagamento,

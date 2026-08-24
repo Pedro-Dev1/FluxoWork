@@ -3,119 +3,32 @@
 import { createAdminClient } from "@/lib/supabase-server"
 import { revalidatePath } from "next/cache"
 import { requireRole } from "@/lib/auth-utils"
-import { registrarAuditoria } from "@/lib/auditoria"
-import { gerarFaturaParaTenant, cancelarFatura, resolverEmailCobranca } from "@/lib/faturamento"
+import {
+  gerarFaturaParaTenant,
+  cancelarFatura,
+  resolverEmailCobranca,
+  atualizarFaturamentoTenant,
+  listarCarteirasFaturamento,
+  type DadosFaturamento,
+} from "@/lib/faturamento"
 import { enviarEmailFaturaPlataforma } from "@/lib/email"
 import type { CarteiraFaturamento, FaturaPlataforma } from "@/types/fatura-plataforma"
 
 export async function listarConfiguracaoFaturamento(): Promise<CarteiraFaturamento[]> {
   await requireRole([])
-  const supabase = await createAdminClient()
-
-  const { data: tenants, error } = await supabase
-    .from("tenants")
-    .select(
-      "id, nome, ativo, valor_por_usuario_ativo, dia_faturamento, documento, email_faturamento, telefone_faturamento, endereco_logradouro, endereco_complemento, endereco_cep, endereco_cidade, endereco_uf",
-    )
-    .order("nome", { ascending: true })
-
-  if (error) {
-    console.error("[v0] Erro ao listar configuração de faturamento:", error)
-    throw new Error("Erro ao listar configuração de faturamento")
-  }
-
-  const { data: colaboradores } = await supabase
-    .from("colaboradores")
-    .select("tenant_id")
-    .eq("ativo", true)
-    .eq("is_super_admin", false)
-    .not("tenant_id", "is", null)
-
-  const contagemPorTenant = new Map<string, number>()
-  for (const c of colaboradores || []) {
-    contagemPorTenant.set(c.tenant_id, (contagemPorTenant.get(c.tenant_id) || 0) + 1)
-  }
-
-  return (tenants || []).map((t) => ({ ...t, usuarios_ativos: contagemPorTenant.get(t.id) || 0 }))
+  return listarCarteirasFaturamento()
 }
 
-export async function atualizarConfiguracaoFaturamento(
-  tenantId: string,
-  dados: {
-    valorPorUsuarioAtivo: number
-    diaFaturamento: number
-    documento: string
-    emailFaturamento?: string | null
-    telefoneFaturamento?: string | null
-    enderecoLogradouro: string
-    enderecoComplemento?: string | null
-    enderecoCep: string
-    enderecoCidade: string
-    enderecoUf: string
-  },
-) {
+export async function atualizarConfiguracaoFaturamento(tenantId: string, dados: DadosFaturamento) {
   const ctx = await requireRole([])
-  const supabase = await createAdminClient()
 
-  if (dados.valorPorUsuarioAtivo <= 0) {
-    throw new Error("O valor por usuário ativo deve ser maior que zero")
-  }
-
-  if (dados.diaFaturamento < 1 || dados.diaFaturamento > 28) {
-    throw new Error("O dia de faturamento deve estar entre 1 e 28")
-  }
-
-  const documento = dados.documento.replace(/\D/g, "")
-  if (documento.length !== 14) {
-    throw new Error("CNPJ inválido")
-  }
-
-  if (!dados.enderecoLogradouro.trim() || !dados.enderecoCidade.trim() || !dados.enderecoUf.trim()) {
-    throw new Error("Endereço (logradouro, cidade e UF) é obrigatório — exigido pela Pagar.me para emitir boleto")
-  }
-
-  const cep = dados.enderecoCep.replace(/\D/g, "")
-  if (cep.length !== 8) {
-    throw new Error("CEP inválido")
-  }
-
-  if (dados.enderecoUf.trim().length !== 2) {
-    throw new Error("UF inválida — use a sigla de 2 letras")
-  }
-
-  const { data: tenant, error } = await supabase
-    .from("tenants")
-    .update({
-      valor_por_usuario_ativo: dados.valorPorUsuarioAtivo,
-      dia_faturamento: dados.diaFaturamento,
-      documento,
-      email_faturamento: dados.emailFaturamento?.trim() || null,
-      telefone_faturamento: dados.telefoneFaturamento?.trim() || null,
-      endereco_logradouro: dados.enderecoLogradouro.trim(),
-      endereco_complemento: dados.enderecoComplemento?.trim() || null,
-      endereco_cep: cep,
-      endereco_cidade: dados.enderecoCidade.trim(),
-      endereco_uf: dados.enderecoUf.trim().toUpperCase(),
-    })
-    .eq("id", tenantId)
-    .select("nome")
-    .single()
-
-  if (error) {
-    console.error("[v0] Erro ao atualizar configuração de faturamento:", error)
-    throw new Error("Erro ao atualizar configuração de faturamento")
-  }
-
-  await registrarAuditoria({
-    colaboradorId: ctx.colaboradorId,
-    tenantId,
-    acao: "faturamento_configurado",
-    tabela: "tenants",
-    registroId: tenantId,
-    detalhes: { carteira: tenant.nome, valor_por_usuario_ativo: dados.valorPorUsuarioAtivo, dia_faturamento: dados.diaFaturamento },
-  })
+  const resultado = await atualizarFaturamentoTenant({ tenantId }, dados, ctx.colaboradorId)
 
   revalidatePath("/admin/faturamento")
+
+  if (!resultado.success) {
+    throw new Error(resultado.error)
+  }
 }
 
 export async function gerarFaturaManual(tenantId: string) {
