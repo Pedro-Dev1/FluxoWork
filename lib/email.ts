@@ -94,6 +94,8 @@ export async function enviarEmailNotaFiscalPendente(params: {
   const resend = getResendClient()
   if (!resend) return
 
+  const textoAlternativo = `Olá, ${params.nomeColaborador}.\n\nSeu pedido de pagamento no valor de ${valorFormatado} foi aprovado pelo financeiro. Para que o pagamento seja processado, você precisa anexar a nota fiscal em até ${params.prazoDias} dias.\n\nAcesse: ${APP_URL}`
+
   try {
     await resend.emails.send({
       from: FROM,
@@ -103,8 +105,9 @@ export async function enviarEmailNotaFiscalPendente(params: {
         preheader: `Seu pedido de ${valorFormatado} foi aprovado. Anexe a nota fiscal para receber o pagamento.`,
         heading,
         bodyHtml,
-        cta: { label: "Acessar e anexar nota", url: `${APP_URL}/login` },
+        cta: { label: "Acessar e anexar nota", url: APP_URL },
       }),
+      text: textoAlternativo,
     })
   } catch (error) {
     console.error("[v0] Erro ao enviar e-mail de nota fiscal pendente:", error)
@@ -122,6 +125,8 @@ export async function enviarEmailRedefinicaoSenha(params: { destinatario: string
   const resend = getResendClient()
   if (!resend) return
 
+  const textoAlternativo = `Olá, ${params.nomeColaborador}.\n\nRecebemos uma solicitação para redefinir a senha da sua conta no FluxoPay. Acesse o link abaixo para criar uma nova senha (expira em 1 hora):\n${resetUrl}\n\nSe você não solicitou essa alteração, pode ignorar este e-mail — sua senha atual continua válida.`
+
   try {
     await resend.emails.send({
       from: FROM,
@@ -133,6 +138,7 @@ export async function enviarEmailRedefinicaoSenha(params: { destinatario: string
         bodyHtml,
         cta: { label: "Redefinir minha senha", url: resetUrl },
       }),
+      text: textoAlternativo,
     })
   } catch (error) {
     console.error("[v0] Erro ao enviar e-mail de redefinição de senha:", error)
@@ -168,6 +174,8 @@ export async function enviarEmailAtualizacao(params: {
   const resend = getResendClient()
   if (!resend) return
 
+  const textoAlternativo = `Olá, ${params.nome}.\n\n${params.subtitulo ? params.subtitulo + "\n\n" : ""}${params.descricao}${params.cta ? `\n\n${params.cta.label}: ${params.cta.url}` : ""}`
+
   try {
     await resend.emails.send({
       from: FROM,
@@ -180,6 +188,7 @@ export async function enviarEmailAtualizacao(params: {
         imagemUrl: params.imagemUrl || undefined,
         cta: params.cta,
       }),
+      text: textoAlternativo,
     })
   } catch (error) {
     console.error("[v0] Erro ao enviar e-mail de atualização:", error)
@@ -204,6 +213,8 @@ export async function enviarEmailPedidoAguardandoAprovacao(params: {
   const resend = getResendClient()
   if (!resend) return
 
+  const textoAlternativo = `Olá, ${params.nomeAprovador}.\n\n${params.nomeColaborador} enviou um pedido de pagamento no valor de ${valorFormatado} que está aguardando a sua aprovação.\n\nAcesse: ${APP_URL}`
+
   try {
     await resend.emails.send({
       from: FROM,
@@ -213,8 +224,9 @@ export async function enviarEmailPedidoAguardandoAprovacao(params: {
         preheader: `${params.nomeColaborador} enviou um pedido de ${valorFormatado} aguardando sua aprovação.`,
         heading,
         bodyHtml,
-        cta: { label: "Aprovar pedido", url: `${APP_URL}/login` },
+        cta: { label: "Aprovar pedido", url: APP_URL },
       }),
+      text: textoAlternativo,
     })
   } catch (error) {
     console.error("[v0] Erro ao enviar e-mail de pedido aguardando aprovação:", error)
