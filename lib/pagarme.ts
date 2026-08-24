@@ -21,6 +21,13 @@ export async function criarPedidoBoleto(params: {
   customerDocument: string
   customerEmail: string
   customerPhone?: string | null
+  customerAddress: {
+    line_1: string
+    line_2?: string
+    zip_code: string
+    city: string
+    state: string
+  }
   valorCentavos: number
   descricaoItem: string
   dataVencimento: string // YYYY-MM-DD
@@ -64,6 +71,17 @@ export async function criarPedidoBoleto(params: {
       document: documento,
       document_type: "CNPJ",
       email: params.customerEmail,
+      // Obrigatório pra boleto com registro (padrão exigido pelos bancos) —
+      // sem isso, o pedido é criado mas a Pagar.me não gera a cobrança de
+      // boleto, silenciosamente.
+      address: {
+        line_1: params.customerAddress.line_1,
+        ...(params.customerAddress.line_2 ? { line_2: params.customerAddress.line_2 } : {}),
+        zip_code: params.customerAddress.zip_code.replace(/\D/g, ""),
+        city: params.customerAddress.city,
+        state: params.customerAddress.state.toUpperCase(),
+        country: "BR",
+      },
       ...(params.customerPhone
         ? {
             phones: {

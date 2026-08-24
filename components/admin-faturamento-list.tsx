@@ -87,6 +87,11 @@ export function AdminFaturamentoList({
     documento: "",
     emailFaturamento: "",
     telefoneFaturamento: "",
+    enderecoLogradouro: "",
+    enderecoComplemento: "",
+    enderecoCep: "",
+    enderecoCidade: "",
+    enderecoUf: "",
   })
 
   const [carteiraGerar, setCarteiraGerar] = useState<CarteiraFaturamento | null>(null)
@@ -114,6 +119,11 @@ export function AdminFaturamentoList({
       documento: carteira.documento || "",
       emailFaturamento: carteira.email_faturamento || "",
       telefoneFaturamento: carteira.telefone_faturamento || "",
+      enderecoLogradouro: carteira.endereco_logradouro || "",
+      enderecoComplemento: carteira.endereco_complemento || "",
+      enderecoCep: carteira.endereco_cep || "",
+      enderecoCidade: carteira.endereco_cidade || "",
+      enderecoUf: carteira.endereco_uf || "",
     })
   }
 
@@ -129,6 +139,11 @@ export function AdminFaturamentoList({
         documento: form.documento,
         emailFaturamento: form.emailFaturamento || null,
         telefoneFaturamento: form.telefoneFaturamento || null,
+        enderecoLogradouro: form.enderecoLogradouro,
+        enderecoComplemento: form.enderecoComplemento || null,
+        enderecoCep: form.enderecoCep,
+        enderecoCidade: form.enderecoCidade,
+        enderecoUf: form.enderecoUf,
       })
       toast({ title: "Faturamento configurado" })
       setCarteiraConfig(null)
@@ -208,7 +223,14 @@ export function AdminFaturamentoList({
         ) : (
           <div className="space-y-2">
             {carteiras.map((carteira) => {
-              const configurado = carteira.valor_por_usuario_ativo != null && carteira.dia_faturamento != null && carteira.documento != null
+              const configurado =
+                carteira.valor_por_usuario_ativo != null &&
+                carteira.dia_faturamento != null &&
+                carteira.documento != null &&
+                carteira.endereco_logradouro != null &&
+                carteira.endereco_cep != null &&
+                carteira.endereco_cidade != null &&
+                carteira.endereco_uf != null
               const estimativa = carteira.usuarios_ativos * (carteira.valor_por_usuario_ativo || 0)
 
               return (
@@ -387,6 +409,57 @@ export function AdminFaturamentoList({
                 onChange={(e) => setForm((p) => ({ ...p, documento: e.target.value }))}
                 placeholder="00.000.000/0000-00"
                 required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="logradouro">Endereço</Label>
+              <Input
+                id="logradouro"
+                value={form.enderecoLogradouro}
+                onChange={(e) => setForm((p) => ({ ...p, enderecoLogradouro: e.target.value }))}
+                placeholder="Rua, número e bairro"
+                required
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="cep">CEP</Label>
+                <Input
+                  id="cep"
+                  value={form.enderecoCep}
+                  onChange={(e) => setForm((p) => ({ ...p, enderecoCep: e.target.value }))}
+                  placeholder="00000-000"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="cidade">Cidade</Label>
+                <Input
+                  id="cidade"
+                  value={form.enderecoCidade}
+                  onChange={(e) => setForm((p) => ({ ...p, enderecoCidade: e.target.value }))}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="uf">UF</Label>
+                <Input
+                  id="uf"
+                  value={form.enderecoUf}
+                  onChange={(e) => setForm((p) => ({ ...p, enderecoUf: e.target.value }))}
+                  maxLength={2}
+                  placeholder="SP"
+                  required
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="complemento">Complemento (opcional)</Label>
+              <Input
+                id="complemento"
+                value={form.enderecoComplemento}
+                onChange={(e) => setForm((p) => ({ ...p, enderecoComplemento: e.target.value }))}
+                placeholder="Sala, andar, bloco"
               />
             </div>
             <div className="space-y-2">

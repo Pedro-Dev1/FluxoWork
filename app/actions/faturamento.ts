@@ -14,7 +14,9 @@ export async function listarConfiguracaoFaturamento(): Promise<CarteiraFaturamen
 
   const { data: tenants, error } = await supabase
     .from("tenants")
-    .select("id, nome, ativo, valor_por_usuario_ativo, dia_faturamento, documento, email_faturamento, telefone_faturamento")
+    .select(
+      "id, nome, ativo, valor_por_usuario_ativo, dia_faturamento, documento, email_faturamento, telefone_faturamento, endereco_logradouro, endereco_complemento, endereco_cep, endereco_cidade, endereco_uf",
+    )
     .order("nome", { ascending: true })
 
   if (error) {
@@ -45,6 +47,11 @@ export async function atualizarConfiguracaoFaturamento(
     documento: string
     emailFaturamento?: string | null
     telefoneFaturamento?: string | null
+    enderecoLogradouro: string
+    enderecoComplemento?: string | null
+    enderecoCep: string
+    enderecoCidade: string
+    enderecoUf: string
   },
 ) {
   const ctx = await requireRole([])
@@ -63,6 +70,19 @@ export async function atualizarConfiguracaoFaturamento(
     throw new Error("CNPJ inválido")
   }
 
+  if (!dados.enderecoLogradouro.trim() || !dados.enderecoCidade.trim() || !dados.enderecoUf.trim()) {
+    throw new Error("Endereço (logradouro, cidade e UF) é obrigatório — exigido pela Pagar.me para emitir boleto")
+  }
+
+  const cep = dados.enderecoCep.replace(/\D/g, "")
+  if (cep.length !== 8) {
+    throw new Error("CEP inválido")
+  }
+
+  if (dados.enderecoUf.trim().length !== 2) {
+    throw new Error("UF inválida — use a sigla de 2 letras")
+  }
+
   const { data: tenant, error } = await supabase
     .from("tenants")
     .update({
@@ -71,6 +91,11 @@ export async function atualizarConfiguracaoFaturamento(
       documento,
       email_faturamento: dados.emailFaturamento?.trim() || null,
       telefone_faturamento: dados.telefoneFaturamento?.trim() || null,
+      endereco_logradouro: dados.enderecoLogradouro.trim(),
+      endereco_complemento: dados.enderecoComplemento?.trim() || null,
+      endereco_cep: cep,
+      endereco_cidade: dados.enderecoCidade.trim(),
+      endereco_uf: dados.enderecoUf.trim().toUpperCase(),
     })
     .eq("id", tenantId)
     .select("nome")

@@ -110,7 +110,7 @@ export async function gerarFaturaParaTenant(
   const { data: tenant, error: tenantError } = await supabase
     .from("tenants")
     .select(
-      "id, nome, ativo, valor_por_usuario_ativo, dia_faturamento, documento, email_faturamento, telefone_faturamento",
+      "id, nome, ativo, valor_por_usuario_ativo, dia_faturamento, documento, email_faturamento, telefone_faturamento, endereco_logradouro, endereco_complemento, endereco_cep, endereco_cidade, endereco_uf",
     )
     .eq("id", tenantId)
     .maybeSingle()
@@ -123,8 +123,29 @@ export async function gerarFaturaParaTenant(
     return { success: false, error: "Carteira inativa — faturamento não gerado." }
   }
 
-  if (!tenant.valor_por_usuario_ativo || !tenant.dia_faturamento || !tenant.documento) {
-    return { success: false, error: "Configuração de faturamento incompleta (valor, dia ou CNPJ ausente)." }
+  if (
+    !tenant.valor_por_usuario_ativo ||
+    !tenant.dia_faturamento ||
+    !tenant.documento ||
+    !tenant.endereco_logradouro ||
+    !tenant.endereco_cep ||
+    !tenant.endereco_cidade ||
+    !tenant.endereco_uf
+  ) {
+    return {
+      success: false,
+      error: "Configuração de faturamento incompleta (valor, dia, CNPJ ou endereço ausente).",
+    }
+  }
+
+  // A Pagar.me exige endereço do cliente pra emitir boleto com registro —
+  // sem isso, o pedido é criado mas nenhuma cobrança de boleto é gerada.
+  const enderecoCliente = {
+    line_1: tenant.endereco_logradouro,
+    line_2: tenant.endereco_complemento || undefined,
+    zip_code: tenant.endereco_cep,
+    city: tenant.endereco_cidade,
+    state: tenant.endereco_uf,
   }
 
   const { data: existente } = await supabase
@@ -135,7 +156,10 @@ export async function gerarFaturaParaTenant(
     .eq("referencia_mes", referenciaMes)
     .maybeSingle()
 
-  if (existente) {
+  // Uma fatura que falhou antes não conta como "já existe" pra fins de
+  // idempotência — sem isso, uma falha de configuração travaria a carteira
+  // pro mês inteiro, sem jeito de tentar de novo depois de corrigir.
+  if (existente && existente.status !== "falhou") {
     return { success: true, fatura: existente as FaturaPlataforma, jaExistia: true }
   }
 
@@ -184,19 +208,23 @@ export async function gerarFaturaParaTenant(
   const valorUnitario = tenant.valor_por_usuario_ativo
   const valorTotal = Number((quantidade * valorUnitario).toFixed(2))
 
-  const { data: faturaInserida, error: insertError } = await supabase
-    .from("faturas_plataforma")
-    .insert({
-      tenant_id: tenantId,
-      referencia_ano: referenciaAno,
-      referencia_mes: referenciaMes,
-      quantidade_usuarios_ativos: quantidade,
-      valor_unitario: valorUnitario,
-      valor_total: valorTotal,
-      status: "pendente",
-    })
-    .select()
-    .single()
+  const dadosFatura = {
+    tenant_id: tenantId,
+    referencia_ano: referenciaAno,
+    referencia_mes: referenciaMes,
+    quantidade_usuarios_ativos: quantidade,
+    valor_unitario: valorUnitario,
+    valor_total: valorTotal,
+    status: "pendente",
+    erro_mensagem: null,
+  }
+
+  // Reaproveita a linha de uma tentativa anterior que falhou (mesmo
+  // tenant/mês) em vez de inserir outra — o unique(tenant_id, ano, mes)
+  // barraria um insert novo de qualquer forma.
+  const { data: faturaInserida, error: insertError } = existente
+    ? await supabase.from("faturas_plataforma").update(dadosFatura).eq("id", existente.id).select().single()
+    : await supabase.from("faturas_plataforma").insert(dadosFatura).select().single()
 
   if (insertError || !faturaInserida) {
     console.error("[v0] Erro ao registrar fatura da plataforma:", insertError)
@@ -233,6 +261,7 @@ export async function gerarFaturaParaTenant(
     customerDocument: tenant.documento,
     customerEmail: emailDestino,
     customerPhone: tenant.telefone_faturamento,
+    customerAddress: enderecoCliente,
     valorCentavos: Math.round(valorTotal * 100),
     descricaoItem: `FluxoPay — ${String(referenciaMes).padStart(2, "0")}/${referenciaAno} (${quantidade} usuário${quantidade === 1 ? "" : "s"} ativo${quantidade === 1 ? "" : "s"})`,
     dataVencimento,

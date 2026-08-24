@@ -30,5 +30,10 @@ export interface CarteiraFaturamento {
   documento: string | null
   email_faturamento: string | null
   telefone_faturamento: string | null
+  endereco_logradouro: string | null
+  endereco_complemento: string | null
+  endereco_cep: string | null
+  endereco_cidade: string | null
+  endereco_uf: string | null
   usuarios_ativos: number
 }
