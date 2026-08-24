@@ -1,5 +1,6 @@
 import { listarAuditoria } from "@/app/actions/tenants"
 import { EmptyState } from "@/components/ui/empty-state"
+import { AdminErroCarregamento } from "@/components/admin-erro-carregamento"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -20,7 +21,13 @@ function nomeRelacionado(rel: any): string {
 }
 
 export default async function AdminAuditoriaPage() {
-  const registros = await listarAuditoria()
+  let registros: any[]
+  try {
+    registros = await listarAuditoria()
+  } catch (error) {
+    console.error("[v0] Erro ao carregar /admin/auditoria:", error)
+    return <AdminErroCarregamento mensagem={error instanceof Error ? error.message : undefined} />
+  }
 
   if (registros.length === 0) {
     return <EmptyState title="Nenhum registro ainda" description="Ações privilegiadas do sistema aparecem aqui." />

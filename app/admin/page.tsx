@@ -1,8 +1,15 @@
 import { Card, CardContent } from "@/components/ui/card"
 import { obterEstatisticasAdmin } from "@/app/actions/tenants"
+import { AdminErroCarregamento } from "@/components/admin-erro-carregamento"
 
 export default async function AdminOverviewPage() {
-  const stats = await obterEstatisticasAdmin()
+  let stats: { totalCarteiras: number; totalColaboradores: number; totalSuperAdmins: number }
+  try {
+    stats = await obterEstatisticasAdmin()
+  } catch (error) {
+    console.error("[v0] Erro ao carregar /admin:", error)
+    return <AdminErroCarregamento mensagem={error instanceof Error ? error.message : undefined} />
+  }
 
   const cards = [
     { label: "Carteiras", value: stats.totalCarteiras },
