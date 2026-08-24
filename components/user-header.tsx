@@ -3,6 +3,7 @@
 import { User, Eye, EyeOff } from "lucide-react"
 import { useValoresVisibility } from "@/contexts/valores-visibility-context"
 import { Button } from "@/components/ui/button"
+import { NotificacoesBell } from "@/components/notificacoes-bell"
 
 interface UserHeaderProps {
   nomeCompleto: string
@@ -36,6 +37,8 @@ export function UserHeader({ nomeCompleto, email, cnpj, salario }: UserHeaderPro
             </span>
           )}
         </div>
+
+        <NotificacoesBell />
 
         <Button
           variant="ghost"

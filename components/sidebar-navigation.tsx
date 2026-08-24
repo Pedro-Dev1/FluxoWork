@@ -19,6 +19,7 @@ import {
   Building2,
   Landmark,
   ScrollText,
+  Megaphone,
 } from "lucide-react"
 import { logout } from "@/app/actions/auth"
 import { Button } from "@/components/ui/button"
@@ -66,6 +67,7 @@ export function SidebarNavigation({ tipoAcesso }: SidebarNavigationProps) {
           items: [
             { href: "/meus-pagamentos", label: "Meus Pagamentos", icon: Receipt },
             { href: "/faturas", label: "Faturas", icon: FileText },
+            { href: "/atualizacoes", label: "Atualizações", icon: Megaphone },
           ],
         },
         { items: [{ href: "/redefinir-senha", label: "Redefinir Senha", icon: Lock }] },
@@ -74,7 +76,12 @@ export function SidebarNavigation({ tipoAcesso }: SidebarNavigationProps) {
 
     if (tipoAcesso === "Supervisor") {
       return [
-        { items: [{ href: "/", label: "Dashboard", icon: LayoutDashboard }] },
+        {
+          items: [
+            { href: "/", label: "Dashboard", icon: LayoutDashboard },
+            { href: "/atualizacoes", label: "Atualizações", icon: Megaphone },
+          ],
+        },
         {
           title: "Pedidos",
           items: [
@@ -96,7 +103,12 @@ export function SidebarNavigation({ tipoAcesso }: SidebarNavigationProps) {
     }
 
     const groups: NavGroup[] = [
-      { items: [{ href: "/", label: "Dashboard", icon: LayoutDashboard }] },
+      {
+        items: [
+          { href: "/", label: "Dashboard", icon: LayoutDashboard },
+          { href: "/atualizacoes", label: "Atualizações", icon: Megaphone },
+        ],
+      },
       {
         title: "Pedidos",
         items: [

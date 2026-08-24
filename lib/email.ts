@@ -15,7 +15,30 @@ function getResendClient(): Resend | null {
 const FROM = process.env.RESEND_FROM_EMAIL || "FluxoPay <notificacoes@simpleqia.com>"
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://fluxopay.connectvending.simpleqia.com"
 
-function emailShell(opts: { preheader: string; heading: string; bodyHtml: string; ctaLabel: string; ctaUrl: string }) {
+function emailShell(opts: {
+  preheader: string
+  heading: string
+  bodyHtml: string
+  imagemUrl?: string
+  cta?: { label: string; url: string } | null
+}) {
+  const imagemHtml = opts.imagemUrl
+    ? `<img src="${opts.imagemUrl}" alt="" style="display:block; width:100%; max-width:416px; border-radius:8px; margin:0 0 20px 0;" />`
+    : ""
+
+  const ctaHtml = opts.cta
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:28px;">
+                <tr>
+                  <td style="border-radius:6px; background-color:#0066E5;">
+                    <a href="${opts.cta.url}" target="_blank" style="display:inline-block; padding:12px 24px; font-size:14px; font-weight:600; color:#FFFFFF; text-decoration:none; border-radius:6px;">${opts.cta.label}</a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:20px 0 0 0; font-size:12px; line-height:18px; color:#8792A2;">Se o botão não funcionar, copie e cole este link no navegador:<br />
+                <a href="${opts.cta.url}" style="color:#0066E5; word-break:break-all;">${opts.cta.url}</a>
+              </p>`
+    : ""
+
   return `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -36,18 +59,10 @@ function emailShell(opts: { preheader: string; heading: string; bodyHtml: string
           </tr>
           <tr>
             <td style="padding:32px;">
+              ${imagemHtml}
               <h1 style="margin:0 0 16px 0; font-size:20px; line-height:28px; font-weight:600; color:#1A1F36;">${opts.heading}</h1>
               <div style="font-size:14px; line-height:22px; color:#545C6B;">${opts.bodyHtml}</div>
-              <table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:28px;">
-                <tr>
-                  <td style="border-radius:6px; background-color:#0066E5;">
-                    <a href="${opts.ctaUrl}" target="_blank" style="display:inline-block; padding:12px 24px; font-size:14px; font-weight:600; color:#FFFFFF; text-decoration:none; border-radius:6px;">${opts.ctaLabel}</a>
-                  </td>
-                </tr>
-              </table>
-              <p style="margin:20px 0 0 0; font-size:12px; line-height:18px; color:#8792A2;">Se o botão não funcionar, copie e cole este link no navegador:<br />
-                <a href="${opts.ctaUrl}" style="color:#0066E5; word-break:break-all;">${opts.ctaUrl}</a>
-              </p>
+              ${ctaHtml}
             </td>
           </tr>
           <tr>
@@ -88,8 +103,7 @@ export async function enviarEmailNotaFiscalPendente(params: {
         preheader: `Seu pedido de ${valorFormatado} foi aprovado. Anexe a nota fiscal para receber o pagamento.`,
         heading,
         bodyHtml,
-        ctaLabel: "Acessar e anexar nota",
-        ctaUrl: `${APP_URL}/login`,
+        cta: { label: "Acessar e anexar nota", url: `${APP_URL}/login` },
       }),
     })
   } catch (error) {
@@ -117,11 +131,92 @@ export async function enviarEmailRedefinicaoSenha(params: { destinatario: string
         preheader: "Clique para criar uma nova senha da sua conta FluxoPay.",
         heading,
         bodyHtml,
-        ctaLabel: "Redefinir minha senha",
-        ctaUrl: resetUrl,
+        cta: { label: "Redefinir minha senha", url: resetUrl },
       }),
     })
   } catch (error) {
     console.error("[v0] Erro ao enviar e-mail de redefinição de senha:", error)
+  }
+}
+
+function escapeHtml(texto: string): string {
+  return texto.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+}
+
+function paragrafosHtml(texto: string): string {
+  return texto
+    .split("\n")
+    .filter((linha) => linha.trim().length > 0)
+    .map((linha) => `<p style="margin:0 0 12px 0;">${escapeHtml(linha)}</p>`)
+    .join("")
+}
+
+export async function enviarEmailAtualizacao(params: {
+  destinatario: string
+  nome: string
+  titulo: string
+  subtitulo?: string | null
+  descricao: string
+  imagemUrl?: string | null
+  cta?: { label: string; url: string } | null
+}) {
+  const bodyHtml = `
+    <p style="margin:0 0 12px 0;">Olá, ${escapeHtml(params.nome)}.</p>
+    ${params.subtitulo ? `<p style="margin:0 0 12px 0; font-weight:600; color:#1A1F36;">${escapeHtml(params.subtitulo)}</p>` : ""}
+    ${paragrafosHtml(params.descricao)}
+  `
+  const resend = getResendClient()
+  if (!resend) return
+
+  try {
+    await resend.emails.send({
+      from: FROM,
+      to: params.destinatario,
+      subject: params.titulo,
+      html: emailShell({
+        preheader: params.subtitulo || params.titulo,
+        heading: params.titulo,
+        bodyHtml,
+        imagemUrl: params.imagemUrl || undefined,
+        cta: params.cta,
+      }),
+    })
+  } catch (error) {
+    console.error("[v0] Erro ao enviar e-mail de atualização:", error)
+  }
+}
+
+export async function enviarEmailPedidoAguardandoAprovacao(params: {
+  destinatario: string
+  nomeAprovador: string
+  nomeColaborador: string
+  valorTotal: number
+}) {
+  const valorFormatado = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
+    params.valorTotal,
+  )
+  const heading = "Pedido aguardando sua aprovação"
+  const bodyHtml = `
+    <p style="margin:0 0 12px 0;">Olá, ${escapeHtml(params.nomeAprovador)}.</p>
+    <p style="margin:0 0 12px 0;">${escapeHtml(params.nomeColaborador)} enviou um pedido de pagamento no valor de <strong style="color:#1A1F36;">${valorFormatado}</strong> que está aguardando a sua aprovação.</p>
+    <p style="margin:0;">Acesse o FluxoPay para revisar e aprovar.</p>
+  `
+  const resend = getResendClient()
+  if (!resend) return
+
+  try {
+    await resend.emails.send({
+      from: FROM,
+      to: params.destinatario,
+      subject: "Pedido aguardando aprovação — FluxoPay",
+      html: emailShell({
+        preheader: `${params.nomeColaborador} enviou um pedido de ${valorFormatado} aguardando sua aprovação.`,
+        heading,
+        bodyHtml,
+        cta: { label: "Aprovar pedido", url: `${APP_URL}/login` },
+      }),
+    })
+  } catch (error) {
+    console.error("[v0] Erro ao enviar e-mail de pedido aguardando aprovação:", error)
   }
 }

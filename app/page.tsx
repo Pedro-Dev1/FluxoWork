@@ -8,11 +8,14 @@ import {
   listarPedidosParaCorrecao,
 } from "./actions/pedidos"
 import { listarEquipes, listarEquipesPorGerente } from "./actions/equipes"
+import { obterBannerDestaque } from "./actions/atualizacoes"
 import { getSession } from "@/lib/session"
 import { redirect } from "next/navigation"
+import Link from "next/link"
 import { DashboardClient } from "@/components/dashboard-client"
 import type { AcaoAgoraItem } from "@/components/dashboard-resumo"
 import { SystemControl } from "@/components/system-control"
+import { AtualizacaoBanner } from "@/components/atualizacao-banner"
 
 export default async function Home() {
   const session = await getSession()
@@ -84,12 +87,16 @@ export default async function Home() {
     return new Date(atual.created_at) < new Date(oldest.created_at) ? atual : oldest
   }, null)
 
+  const banner = await obterBannerDestaque().catch(() => null)
+
   return (
     <div className="container mx-auto py-8 px-4 lg:px-6 max-w-7xl">
       <div className="mb-8">
         <h1 className="text-2xl font-semibold mb-1 text-foreground">Dashboard</h1>
         <p className="text-sm text-muted-foreground">Visão geral de pagamentos e pedidos</p>
       </div>
+
+      <AtualizacaoBanner atualizacao={banner} />
 
       <DashboardClient
         pedidos={pedidos}
@@ -110,6 +117,18 @@ export default async function Home() {
       {isAdmin && (
         <div className="mt-6">
           <SystemControl />
+        </div>
+      )}
+
+      {session?.isSuperAdmin && (
+        <div className="mt-6 flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3">
+          <div>
+            <p className="text-sm font-medium text-foreground">Painel Super Admin</p>
+            <p className="text-sm text-muted-foreground">Carteiras, usuários e auditoria de todo o sistema.</p>
+          </div>
+          <Link href="/admin" className="text-sm font-medium text-primary hover:underline">
+            Acessar →
+          </Link>
         </div>
       )}
     </div>

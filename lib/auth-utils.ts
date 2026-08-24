@@ -81,3 +81,13 @@ export function scopeToTenant<Q>(query: Q, ctx: Pick<AuthContext, "tenantId" | "
   if (ctx.isSuperAdmin) return query
   return (query as any).eq("tenant_id", ctx.tenantId)
 }
+
+// Para tabelas de conteúdo institucional (ex.: atualizacoes), onde
+// tenant_id NULL significa o OPOSTO de scopeToTenant(): "visível em todas
+// as carteiras", não "sem carteira". Por isso não reaproveita scopeToTenant
+// — aqui o usuário sempre vê tanto o conteúdo global (tenant_id null)
+// quanto o da própria carteira; Super Admin continua vendo tudo.
+export function scopeToTenantOrGlobal<Q>(query: Q, ctx: Pick<AuthContext, "tenantId" | "isSuperAdmin">): Q {
+  if (ctx.isSuperAdmin) return query
+  return (query as any).or(`tenant_id.is.null,tenant_id.eq.${ctx.tenantId}`)
+}

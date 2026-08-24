@@ -5,15 +5,16 @@ import type { NovoPedido, AcaoPedido } from "@/types/pedido"
 import { revalidatePath } from "next/cache"
 import { put } from "@vercel/blob"
 import { calcularComposicaoPedido, calcularComposicaoReembolsoKm } from "@/lib/domain/calculo-financeiro"
-import { enviarEmailNotaFiscalPendente } from "@/lib/email"
+import { enviarEmailNotaFiscalPendente, enviarEmailPedidoAguardandoAprovacao } from "@/lib/email"
 import { requireAuth, requireRole, scopeToTenant, type AuthContext } from "@/lib/auth-utils"
+import { criarNotificacaoTransacional, resolverAprovadores } from "@/lib/notificacoes"
 
 export async function criarPedido(data: NovoPedido) {
   const ctx = await requireRole(["Supervisor", "Adm", "Gerente", "Financeiro"])
   const supabase = await getSupabaseServerClient()
 
   const { data: colaboradorAlvo } = await scopeToTenant(
-    supabase.from("colaboradores").select("id").eq("id", data.colaborador_id),
+    supabase.from("colaboradores").select("id, nome_completo").eq("id", data.colaborador_id),
     ctx,
   ).maybeSingle()
 
@@ -137,6 +138,37 @@ export async function criarPedido(data: NovoPedido) {
     throw new Error("Erro ao criar pedido de pagamento")
   }
 
+  const etapaAprovacao = statusInicial === "pendente_gerente" ? "gerente" : "financeiro"
+  const aprovadores = await resolverAprovadores(data.colaborador_id, ctx.tenantId, etapaAprovacao)
+
+  if (aprovadores.length > 0) {
+    await criarNotificacaoTransacional({
+      tenantId: ctx.tenantId,
+      // Tipo distinto por etapa: o mesmo pedido passa por "aguardando
+      // gerente" e depois "aguardando financeiro" como dois eventos reais
+      // diferentes — usar o mesmo tipo faria a segunda notificação colidir
+      // com a primeira no unique(tipo, entity_type, entity_id) e nunca ser
+      // criada.
+      tipo: etapaAprovacao === "gerente" ? "ORDER_WAITING_APPROVAL_GERENTE" : "ORDER_WAITING_APPROVAL_FINANCEIRO",
+      titulo: "Pedido aguardando aprovação",
+      mensagem: `${colaboradorAlvo.nome_completo} enviou um pedido de pagamento que está aguardando sua aprovação.`,
+      entityType: "pedido_pagamento",
+      entityId: pedido.id,
+      ctaTexto: "Aprovar pedido",
+      ctaUrl: "/aprovacoes",
+      destinatarios: aprovadores,
+      enviarEmail: true,
+      enviarEmailFn: async ({ destinatario, nome }) => {
+        await enviarEmailPedidoAguardandoAprovacao({
+          destinatario,
+          nomeAprovador: nome,
+          nomeColaborador: colaboradorAlvo.nome_completo,
+          valorTotal,
+        })
+      },
+    })
+  }
+
   revalidatePath("/pedidos")
   return pedido
 }
@@ -167,7 +199,7 @@ export async function acaoGerente(data: AcaoPedido) {
     supabase.from("pedidos_pagamento").update(updates).eq("id", data.pedido_id),
     ctx,
   )
-    .select("id")
+    .select("id, valor_total, colaborador:colaboradores!colaborador_id(nome_completo)")
     .maybeSingle()
 
   if (error) {
@@ -177,6 +209,35 @@ export async function acaoGerente(data: AcaoPedido) {
 
   if (!atualizado) {
     throw new Error("Pedido não encontrado")
+  }
+
+  if (data.acao === "aprovar") {
+    const colaboradorInfo = Array.isArray(atualizado.colaborador) ? atualizado.colaborador[0] : atualizado.colaborador
+    const nomeColaborador = colaboradorInfo?.nome_completo || "Um colaborador"
+    const aprovadores = await resolverAprovadores(ctx.colaboradorId, ctx.tenantId, "financeiro")
+
+    if (aprovadores.length > 0) {
+      await criarNotificacaoTransacional({
+        tenantId: ctx.tenantId,
+        tipo: "ORDER_WAITING_APPROVAL_FINANCEIRO",
+        titulo: "Pedido aguardando aprovação",
+        mensagem: `${nomeColaborador} tem um pedido de pagamento aguardando aprovação do financeiro.`,
+        entityType: "pedido_pagamento",
+        entityId: data.pedido_id,
+        ctaTexto: "Aprovar pedido",
+        ctaUrl: "/aprovacoes",
+        destinatarios: aprovadores,
+        enviarEmail: true,
+        enviarEmailFn: async ({ destinatario, nome }) => {
+          await enviarEmailPedidoAguardandoAprovacao({
+            destinatario,
+            nomeAprovador: nome,
+            nomeColaborador,
+            valorTotal: atualizado.valor_total,
+          })
+        },
+      })
+    }
   }
 
   revalidatePath("/aprovacoes")
@@ -218,7 +279,7 @@ export async function acaoFinanceiro(data: AcaoPedido) {
     supabase.from("pedidos_pagamento").update(updates).eq("id", data.pedido_id),
     ctx,
   )
-    .select("valor_total, colaborador:colaboradores!colaborador_id(nome_completo, email)")
+    .select("id, valor_total, colaborador:colaboradores!colaborador_id(id, nome_completo, email)")
     .maybeSingle()
 
   if (error) {
@@ -240,6 +301,24 @@ export async function acaoFinanceiro(data: AcaoPedido) {
         nomeColaborador: colaboradorInfo.nome_completo,
         valorTotal: pedidoAtualizado.valor_total,
         prazoDias: 2,
+      })
+    }
+
+    if (colaboradorInfo) {
+      // enviarEmail: false de propósito — o e-mail desse evento já tem um
+      // ponto de disparo funcionando logo acima; aqui só registramos a
+      // notificação in-app, sem duplicar o envio.
+      await criarNotificacaoTransacional({
+        tenantId: ctx.tenantId,
+        tipo: "ORDER_APPROVED",
+        titulo: "Pedido aprovado",
+        mensagem: "Seu pedido foi aprovado e já está disponível para você anexar a nota fiscal.",
+        entityType: "pedido_pagamento",
+        entityId: pedidoAtualizado.id,
+        ctaTexto: "Anexar nota",
+        ctaUrl: "/meus-pagamentos",
+        destinatarios: [{ colaboradorId: colaboradorInfo.id, email: colaboradorInfo.email, nome: colaboradorInfo.nome_completo }],
+        enviarEmail: false,
       })
     }
   }
