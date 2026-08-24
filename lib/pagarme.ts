@@ -6,7 +6,7 @@
 // getResendClient() em lib/email.ts: uma env var ausente não pode derrubar o
 // build nem qualquer rota que importe este arquivo.
 
-const PAGARME_API_URL = "https://api.pagar.me/core/v5/orders"
+const PAGARME_API_BASE = "https://api.pagar.me/core/v5"
 
 function getPagarmeSecretKey(): string | null {
   if (!process.env.PAGARME_SECRET_KEY) {
@@ -89,7 +89,7 @@ export async function criarPedidoBoleto(params: {
   }
 
   try {
-    const response = await fetch(PAGARME_API_URL, {
+    const response = await fetch(`${PAGARME_API_BASE}/orders`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -125,6 +125,39 @@ export async function criarPedidoBoleto(params: {
   } catch (error) {
     console.error("[v0] Erro inesperado ao chamar a Pagar.me:", error)
     return { success: false, error: error instanceof Error ? error.message : "Erro desconhecido ao emitir boleto." }
+  }
+}
+
+// Cancela uma cobrança ainda não paga (boleto emitido, aguardando
+// pagamento). Não deve ser usada pra desfazer uma cobrança já paga — isso é
+// estorno, exige dados bancários e é tratado como um fluxo separado, fora do
+// escopo de um clique único.
+export async function cancelarCobranca(chargeId: string): Promise<{ success: true } | { success: false; error: string }> {
+  const secretKey = getPagarmeSecretKey()
+  if (!secretKey) {
+    return { success: false, error: "Integração com a Pagar.me não configurada (PAGARME_SECRET_KEY ausente)." }
+  }
+
+  try {
+    const response = await fetch(`${PAGARME_API_BASE}/charges/${chargeId}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${secretKey}:`).toString("base64")}`,
+      },
+    })
+
+    const data = await response.json().catch(() => null)
+
+    if (!response.ok) {
+      const mensagem = data?.message || data?.errors?.[0]?.message || `Erro ${response.status} na Pagar.me`
+      console.error("[v0] Erro ao cancelar cobrança na Pagar.me:", mensagem, data)
+      return { success: false, error: mensagem }
+    }
+
+    return { success: true }
+  } catch (error) {
+    console.error("[v0] Erro inesperado ao cancelar cobrança na Pagar.me:", error)
+    return { success: false, error: error instanceof Error ? error.message : "Erro desconhecido ao cancelar cobrança." }
   }
 }
 

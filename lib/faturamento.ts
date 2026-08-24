@@ -1,5 +1,5 @@
 import { createAdminClient } from "./supabase-server"
-import { criarPedidoBoleto } from "./pagarme"
+import { criarPedidoBoleto, cancelarCobranca } from "./pagarme"
 import { enviarEmailFaturaPlataforma } from "./email"
 import { registrarAuditoria } from "./auditoria"
 import { criarNotificacaoTransacional } from "./notificacoes"
@@ -26,6 +26,76 @@ function formatarDataBr(dataIso: string): string {
 type ResultadoFatura =
   | { success: true; fatura: FaturaPlataforma; jaExistia: boolean }
   | { success: false; error: string }
+
+// Compartilhado entre a emissão (aqui embaixo) e o reenvio manual de e-mail
+// (app/actions/faturamento.ts) — os dois precisam do mesmo fallback pro
+// e-mail do Adm da carteira quando não há e-mail de cobrança configurado.
+export async function resolverEmailCobranca(tenantId: string, emailFaturamento: string | null): Promise<string | null> {
+  if (emailFaturamento) return emailFaturamento
+
+  const supabase = await createAdminClient()
+  const { data: admin } = await supabase
+    .from("colaboradores")
+    .select("email")
+    .eq("tenant_id", tenantId)
+    .eq("tipo_acesso", "Adm")
+    .eq("ativo", true)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
+  return admin?.email || null
+}
+
+// Cancela uma fatura ainda não paga (boleto emitido, aguardando pagamento,
+// ou já vencido sem pagamento). Faturas pagas não podem ser canceladas por
+// aqui — desfazer uma cobrança já paga é estorno, exige dados bancários e é
+// um fluxo manual, fora do escopo de um clique único.
+export async function cancelarFatura(
+  faturaId: string,
+  acionadoPor: string | null,
+): Promise<{ success: true } | { success: false; error: string }> {
+  const supabase = await createAdminClient()
+
+  const { data: fatura, error } = await supabase
+    .from("faturas_plataforma")
+    .select("id, tenant_id, status, pagarme_charge_id")
+    .eq("id", faturaId)
+    .maybeSingle()
+
+  if (error || !fatura) {
+    return { success: false, error: "Fatura não encontrada." }
+  }
+
+  if (!["emitida", "vencida"].includes(fatura.status)) {
+    return { success: false, error: "Só é possível cancelar uma fatura emitida (aguardando pagamento) ou vencida." }
+  }
+
+  if (!fatura.pagarme_charge_id) {
+    return { success: false, error: "Esta fatura não tem uma cobrança associada na Pagar.me." }
+  }
+
+  const resultado = await cancelarCobranca(fatura.pagarme_charge_id)
+  if (!resultado.success) {
+    return { success: false, error: resultado.error }
+  }
+
+  await supabase
+    .from("faturas_plataforma")
+    .update({ status: "cancelada", updated_at: new Date().toISOString() })
+    .eq("id", faturaId)
+
+  await registrarAuditoria({
+    colaboradorId: acionadoPor,
+    tenantId: fatura.tenant_id,
+    acao: "fatura_plataforma_cancelada",
+    tabela: "faturas_plataforma",
+    registroId: faturaId,
+    detalhes: { origem: "manual" },
+  })
+
+  return { success: true }
+}
 
 export async function gerarFaturaParaTenant(
   tenantId: string,
@@ -148,19 +218,7 @@ export async function gerarFaturaParaTenant(
     return { success: true, fatura: (faturaCancelada || faturaInserida) as FaturaPlataforma, jaExistia: false }
   }
 
-  let emailDestino = tenant.email_faturamento
-  if (!emailDestino) {
-    const { data: admin } = await supabase
-      .from("colaboradores")
-      .select("email")
-      .eq("tenant_id", tenantId)
-      .eq("tipo_acesso", "Adm")
-      .eq("ativo", true)
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .maybeSingle()
-    emailDestino = admin?.email || null
-  }
+  const emailDestino = await resolverEmailCobranca(tenantId, tenant.email_faturamento)
 
   if (!emailDestino) {
     const mensagem = "Nenhum e-mail de cobrança configurado e a carteira não tem um Adm ativo com e-mail."

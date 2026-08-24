@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase-server"
 import { revalidatePath } from "next/cache"
 import { requireRole } from "@/lib/auth-utils"
 import { registrarAuditoria } from "@/lib/auditoria"
-import { gerarFaturaParaTenant } from "@/lib/faturamento"
+import { gerarFaturaParaTenant, cancelarFatura, resolverEmailCobranca } from "@/lib/faturamento"
 import { enviarEmailFaturaPlataforma } from "@/lib/email"
 import type { CarteiraFaturamento, FaturaPlataforma } from "@/types/fatura-plataforma"
 
@@ -155,9 +155,9 @@ export async function reenviarEmailFatura(faturaId: string) {
     throw new Error("Esta fatura ainda não tem um boleto emitido")
   }
 
-  const emailDestino = fatura.tenant?.email_faturamento
+  const emailDestino = await resolverEmailCobranca(fatura.tenant_id, fatura.tenant?.email_faturamento || null)
   if (!emailDestino) {
-    throw new Error("Esta carteira não tem e-mail de cobrança configurado")
+    throw new Error("Esta carteira não tem e-mail de cobrança configurado nem um Adm ativo com e-mail")
   }
 
   await enviarEmailFaturaPlataforma({
@@ -172,4 +172,16 @@ export async function reenviarEmailFatura(faturaId: string) {
     boletoUrl: fatura.boleto_url,
     boletoLinha: fatura.boleto_linha_digitavel,
   })
+}
+
+export async function cancelarFaturaPlataforma(faturaId: string) {
+  const ctx = await requireRole([])
+
+  const resultado = await cancelarFatura(faturaId, ctx.colaboradorId)
+
+  revalidatePath("/admin/faturamento")
+
+  if (!resultado.success) {
+    throw new Error(resultado.error)
+  }
 }

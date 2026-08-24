@@ -26,9 +26,10 @@ import {
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Settings2, MoreVertical, Loader2, FileText, Send, ExternalLink } from "lucide-react"
+import { Settings2, MoreVertical, Loader2, FileText, Send, ExternalLink, Ban } from "lucide-react"
 import {
   atualizarConfiguracaoFaturamento,
+  cancelarFaturaPlataforma,
   gerarFaturaManual,
   listarConfiguracaoFaturamento,
   listarFaturasPlataforma,
@@ -91,6 +92,8 @@ export function AdminFaturamentoList({
   const [carteiraGerar, setCarteiraGerar] = useState<CarteiraFaturamento | null>(null)
   const [gerando, setGerando] = useState(false)
   const [reenviando, setReenviando] = useState<string | null>(null)
+  const [faturaCancelar, setFaturaCancelar] = useState<Fatura | null>(null)
+  const [cancelando, setCancelando] = useState(false)
 
   const recarregar = async () => {
     try {
@@ -173,6 +176,25 @@ export function AdminFaturamentoList({
       })
     } finally {
       setReenviando(null)
+    }
+  }
+
+  const handleCancelar = async () => {
+    if (!faturaCancelar) return
+    setCancelando(true)
+    try {
+      await cancelarFaturaPlataforma(faturaCancelar.id)
+      toast({ title: "Fatura cancelada" })
+      setFaturaCancelar(null)
+      recarregar()
+    } catch (error) {
+      toast({
+        title: "Erro ao cancelar fatura",
+        description: error instanceof Error ? error.message : "Tente novamente",
+        variant: "destructive",
+      })
+    } finally {
+      setCancelando(false)
     }
   }
 
@@ -302,6 +324,16 @@ export function AdminFaturamentoList({
                               <Send className="h-4 w-4" />
                             )}
                           </Button>
+                          {(fatura.status === "emitida" || fatura.status === "vencida") && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title="Cancelar fatura"
+                              onClick={() => setFaturaCancelar(fatura)}
+                            >
+                              <Ban className="h-4 w-4 text-danger" />
+                            </Button>
+                          )}
                         </div>
                       ) : (
                         "—"
@@ -403,6 +435,27 @@ export function AdminFaturamentoList({
             <AlertDialogAction onClick={handleGerarFatura} disabled={gerando}>
               {gerando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Gerar fatura
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!faturaCancelar} onOpenChange={(open) => !open && setFaturaCancelar(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Cancelar fatura de {faturaCancelar?.tenant?.nome} ({faturaCancelar ? `${MESES[faturaCancelar.referencia_mes - 1]}/${faturaCancelar.referencia_ano}` : ""})?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Isso cancela a cobrança na Pagar.me — o boleto deixa de ser válido para pagamento. Só funciona pra
+              faturas ainda não pagas; uma fatura já paga precisa de estorno manual.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancelando}>Voltar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleCancelar} disabled={cancelando} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {cancelando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Cancelar fatura
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
