@@ -75,6 +75,35 @@ export async function listarFaturasPlataforma(tenantId?: string): Promise<
   return (data || []) as (FaturaPlataforma & { tenant: { nome: string } | null })[]
 }
 
+// Visão do próprio cliente (Adm/Financeiro da carteira) sobre as faturas
+// que a FluxoPay emitiu pra empresa dele — mesma tabela do painel Super
+// Admin, só que escopada pra carteira de quem está logado. Fica em
+// app/faturas (não em /admin), por isso o guard é de papel normal, não
+// requireRole([]).
+export async function listarFaturasPlataformaDoTenant(): Promise<FaturaPlataforma[]> {
+  const ctx = await requireRole(["Adm", "Financeiro"])
+
+  // Super Admin sem "ver como" caiu aqui direto pela URL — ele não tem
+  // carteira própria, então não há fatura da plataforma pra mostrar.
+  if (!ctx.tenantId) return []
+
+  const supabase = await createAdminClient()
+
+  const { data, error } = await supabase
+    .from("faturas_plataforma")
+    .select("*")
+    .eq("tenant_id", ctx.tenantId)
+    .order("referencia_ano", { ascending: false })
+    .order("referencia_mes", { ascending: false })
+
+  if (error) {
+    console.error("[v0] Erro ao listar fatura da plataforma do tenant:", error)
+    return []
+  }
+
+  return (data || []) as FaturaPlataforma[]
+}
+
 export async function reenviarEmailFatura(faturaId: string) {
   await requireRole([])
   const supabase = await createAdminClient()

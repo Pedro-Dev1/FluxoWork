@@ -1,8 +1,10 @@
 import { redirect } from "next/navigation"
 import { getSession } from "@/lib/session"
 import { getFaturas } from "@/app/actions/faturas"
+import { listarFaturasPlataformaDoTenant } from "@/app/actions/faturamento"
 import { getColaboradores } from "@/app/actions/colaboradores"
 import { FaturasList } from "@/components/faturas-list"
+import { FaturaPlataformaCard } from "@/components/fatura-plataforma-card"
 import { SidebarNavigation } from "@/components/sidebar-navigation"
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
 import { UserHeader } from "@/components/user-header"
@@ -30,6 +32,7 @@ export default async function FaturasPage() {
   
   const faturas = await getFaturas(colaboradorId, shouldViewAllFaturas)
   const colaboradores = canManageFaturas ? await getColaboradores() : []
+  const faturasPlataforma = await listarFaturasPlataformaDoTenant()
 
   return (
     <SidebarProvider>
@@ -54,7 +57,9 @@ export default async function FaturasPage() {
             </p>
           </div>
 
-          <FaturasList 
+          <FaturaPlataformaCard faturas={faturasPlataforma} />
+
+          <FaturasList
             faturas={faturas}
             colaboradores={colaboradores}
             isAdmin={canManageFaturas}
