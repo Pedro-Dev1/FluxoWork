@@ -163,7 +163,6 @@ export async function criarPedido(data: NovoPedido) {
           destinatario,
           nomeAprovador: nome,
           nomeColaborador: colaboradorAlvo.nome_completo,
-          valorTotal,
         })
       },
     })
@@ -199,7 +198,7 @@ export async function acaoGerente(data: AcaoPedido) {
     supabase.from("pedidos_pagamento").update(updates).eq("id", data.pedido_id),
     ctx,
   )
-    .select("id, valor_total, colaborador:colaboradores!colaborador_id(nome_completo)")
+    .select("id, colaborador:colaboradores!colaborador_id(nome_completo)")
     .maybeSingle()
 
   if (error) {
@@ -233,7 +232,6 @@ export async function acaoGerente(data: AcaoPedido) {
             destinatario,
             nomeAprovador: nome,
             nomeColaborador,
-            valorTotal: atualizado.valor_total,
           })
         },
       })
@@ -279,7 +277,7 @@ export async function acaoFinanceiro(data: AcaoPedido) {
     supabase.from("pedidos_pagamento").update(updates).eq("id", data.pedido_id),
     ctx,
   )
-    .select("id, valor_total, colaborador:colaboradores!colaborador_id(id, nome_completo, email)")
+    .select("id, colaborador:colaboradores!colaborador_id(id, nome_completo, email)")
     .maybeSingle()
 
   if (error) {
@@ -299,7 +297,6 @@ export async function acaoFinanceiro(data: AcaoPedido) {
       await enviarEmailNotaFiscalPendente({
         destinatario: colaboradorInfo.email,
         nomeColaborador: colaboradorInfo.nome_completo,
-        valorTotal: pedidoAtualizado.valor_total,
         prazoDias: 2,
       })
     }

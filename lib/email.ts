@@ -81,20 +81,18 @@ function emailShell(opts: {
 export async function enviarEmailNotaFiscalPendente(params: {
   destinatario: string
   nomeColaborador: string
-  valorTotal: number
   prazoDias: number
 }) {
-  const valorFormatado = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(params.valorTotal)
   const heading = "Seu pedido foi aprovado — falta anexar a nota fiscal"
   const bodyHtml = `
     <p style="margin:0 0 12px 0;">Olá, ${params.nomeColaborador}.</p>
-    <p style="margin:0 0 12px 0;">Seu pedido de pagamento no valor de <strong style="color:#1A1F36;">${valorFormatado}</strong> foi aprovado pelo financeiro. Para que o pagamento seja processado, você precisa anexar a nota fiscal em até ${params.prazoDias} dias.</p>
+    <p style="margin:0 0 12px 0;">Seu pedido de pagamento foi aprovado pelo financeiro. Para que o pagamento seja processado, você precisa anexar a nota fiscal em até ${params.prazoDias} dias.</p>
     <p style="margin:0;">Acesse o sistema e anexe sua nota fiscal o quanto antes.</p>
   `
   const resend = getResendClient()
   if (!resend) return
 
-  const textoAlternativo = `Olá, ${params.nomeColaborador}.\n\nSeu pedido de pagamento no valor de ${valorFormatado} foi aprovado pelo financeiro. Para que o pagamento seja processado, você precisa anexar a nota fiscal em até ${params.prazoDias} dias.\n\nAcesse: ${APP_URL}`
+  const textoAlternativo = `Olá, ${params.nomeColaborador}.\n\nSeu pedido de pagamento foi aprovado pelo financeiro. Para que o pagamento seja processado, você precisa anexar a nota fiscal em até ${params.prazoDias} dias.\n\nAcesse: ${APP_URL}`
 
   try {
     await resend.emails.send({
@@ -102,7 +100,7 @@ export async function enviarEmailNotaFiscalPendente(params: {
       to: params.destinatario,
       subject: "Pedido aprovado — anexe sua nota fiscal",
       html: emailShell({
-        preheader: `Seu pedido de ${valorFormatado} foi aprovado. Anexe a nota fiscal para receber o pagamento.`,
+        preheader: "Seu pedido foi aprovado. Anexe a nota fiscal para receber o pagamento.",
         heading,
         bodyHtml,
         cta: { label: "Acessar e anexar nota", url: APP_URL },
@@ -199,21 +197,17 @@ export async function enviarEmailPedidoAguardandoAprovacao(params: {
   destinatario: string
   nomeAprovador: string
   nomeColaborador: string
-  valorTotal: number
 }) {
-  const valorFormatado = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
-    params.valorTotal,
-  )
   const heading = "Pedido aguardando sua aprovação"
   const bodyHtml = `
     <p style="margin:0 0 12px 0;">Olá, ${escapeHtml(params.nomeAprovador)}.</p>
-    <p style="margin:0 0 12px 0;">${escapeHtml(params.nomeColaborador)} enviou um pedido de pagamento no valor de <strong style="color:#1A1F36;">${valorFormatado}</strong> que está aguardando a sua aprovação.</p>
+    <p style="margin:0 0 12px 0;">${escapeHtml(params.nomeColaborador)} enviou um pedido de pagamento que está aguardando a sua aprovação.</p>
     <p style="margin:0;">Acesse o FluxoPay para revisar e aprovar.</p>
   `
   const resend = getResendClient()
   if (!resend) return
 
-  const textoAlternativo = `Olá, ${params.nomeAprovador}.\n\n${params.nomeColaborador} enviou um pedido de pagamento no valor de ${valorFormatado} que está aguardando a sua aprovação.\n\nAcesse: ${APP_URL}`
+  const textoAlternativo = `Olá, ${params.nomeAprovador}.\n\n${params.nomeColaborador} enviou um pedido de pagamento que está aguardando a sua aprovação.\n\nAcesse: ${APP_URL}`
 
   try {
     await resend.emails.send({
@@ -221,7 +215,7 @@ export async function enviarEmailPedidoAguardandoAprovacao(params: {
       to: params.destinatario,
       subject: "Pedido aguardando aprovação — FluxoPay",
       html: emailShell({
-        preheader: `${params.nomeColaborador} enviou um pedido de ${valorFormatado} aguardando sua aprovação.`,
+        preheader: `${params.nomeColaborador} enviou um pedido aguardando sua aprovação.`,
         heading,
         bodyHtml,
         cta: { label: "Aprovar pedido", url: APP_URL },
