@@ -13,6 +13,7 @@ import { ValoresVisibilityProvider } from "@/contexts/valores-visibility-context
 import { TermsAcceptanceProvider } from "@/components/terms-acceptance-provider"
 import { SystemStatusProvider } from "@/components/system-status-provider"
 import { Toaster } from "@/components/ui/sonner"
+import { Toaster as ToasterShadcn } from "@/components/ui/toaster"
 import cn from "classnames"
 
 const geistSans = Geist({
@@ -55,6 +56,14 @@ export default async function RootLayout({
     <html lang="pt-BR" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body className="antialiased bg-background">
         <Toaster richColors position="top-right" />
+        {/* Duas bibliotecas de toast coexistem no projeto: a maioria dos
+            componentes chama a `toast()` da lib "sonner" (Toaster acima), mas
+            vários outros (admin-*, faturas-list, colaboradores-list) usam o
+            hook useToast() de hooks/use-toast.ts, que só renderiza através
+            deste <ToasterShadcn />. Sem ele montado, toast({...}) daqueles
+            componentes atualizava estado que nada na árvore lia — clique sem
+            nenhum feedback visível, mesmo quando a ação teve sucesso. */}
+        <ToasterShadcn />
         <ValoresVisibilityProvider>
           {!isAuthPage && (
             <SidebarNavigation
