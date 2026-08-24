@@ -60,6 +60,7 @@ export async function criarPedidoBoleto(params: {
   const body: Record<string, unknown> = {
     items: [
       {
+        code: "fluxopay-mensalidade",
         amount: params.valorCentavos,
         description: params.descricaoItem,
         quantity: 1,

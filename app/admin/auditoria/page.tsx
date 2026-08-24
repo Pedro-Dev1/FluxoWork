@@ -3,8 +3,21 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { AdminErroCarregamento } from "@/components/admin-erro-carregamento"
 import { ehErroDeControleDoNext } from "@/lib/next-render-errors"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { format } from "date-fns"
-import { ptBR } from "date-fns/locale"
+
+// date-fns format() usa o timezone local do processo Node — na Vercel isso
+// é UTC, não horário de Brasília, e mostrava hora errada (3h à frente).
+// Intl.DateTimeFormat com timeZone explícito resolve sem depender do
+// timezone do servidor.
+function formatarDataHoraBr(iso: string): string {
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(iso))
+}
 
 const ACAO_LABELS: Record<string, string> = {
   carteira_criada: "Carteira criada",
@@ -55,9 +68,7 @@ export default async function AdminAuditoriaPage() {
         <TableBody>
           {registros.map((r: any) => (
             <TableRow key={r.id}>
-              <TableCell className="whitespace-nowrap tabular-nums">
-                {format(new Date(r.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
-              </TableCell>
+              <TableCell className="whitespace-nowrap tabular-nums">{formatarDataHoraBr(r.created_at)}</TableCell>
               <TableCell>{nomeRelacionado(r.colaborador)}</TableCell>
               <TableCell>{ACAO_LABELS[r.acao] || r.acao}</TableCell>
               <TableCell>{nomeRelacionado(r.tenant)}</TableCell>
