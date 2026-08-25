@@ -162,30 +162,74 @@ export async function criarPedidoBoleto(params: {
   }
 }
 
+// Dados bancários do cliente cobrado — exigidos pela Pagar.me pra cancelar
+// um boleto nessa conta (PSP). Ver comentário em cancelarCobranca() abaixo.
+export type BankAccountPagarme = {
+  bankCode: string
+  agencia: string
+  agenciaDv?: string | null
+  conta: string
+  contaDv?: string | null
+  documentNumber: string
+  legalName: string
+  type: "conta_corrente" | "conta_poupanca"
+}
+
 // Cancela uma cobrança ainda não paga (boleto emitido, aguardando
 // pagamento). Não deve ser usada pra desfazer uma cobrança já paga — isso é
-// estorno, exige dados bancários e é tratado como um fluxo separado, fora do
-// escopo de um clique único.
-export async function cancelarCobranca(chargeId: string): Promise<{ success: true } | { success: false; error: string }> {
+// estorno e é tratado como um fluxo separado, fora do escopo de um clique
+// único.
+//
+// bankAccount é obrigatório mesmo pra boleto nunca pago: como esta é uma
+// conta PSP, a Pagar.me não garante que o boleto (já registrado no banco
+// emissor desde a emissão) não será pago entre o clique em "Cancelar" e o
+// cancelamento propagar — por isso exige upfront pra onde devolver o valor
+// se isso acontecer ("Cancelamento Garantido"). Sem isso a chamada falha com
+// "BankAccount information is required to refund boleto payment method."
+export async function cancelarCobranca(
+  chargeId: string,
+  bankAccount: BankAccountPagarme,
+): Promise<{ success: true } | { success: false; error: string }> {
   const secretKey = getPagarmeSecretKey()
   if (!secretKey) {
     return { success: false, error: "Integração com a Pagar.me não configurada (PAGARME_SECRET_KEY ausente)." }
+  }
+
+  const body = {
+    bank_account: {
+      bank_code: bankAccount.bankCode,
+      agencia: bankAccount.agencia,
+      ...(bankAccount.agenciaDv ? { agencia_dv: bankAccount.agenciaDv } : {}),
+      conta: bankAccount.conta,
+      ...(bankAccount.contaDv ? { conta_dv: bankAccount.contaDv } : {}),
+      document_number: bankAccount.documentNumber,
+      legal_name: bankAccount.legalName,
+      type: bankAccount.type,
+    },
   }
 
   try {
     const response = await fetch(`${PAGARME_API_BASE}/charges/${chargeId}`, {
       method: "DELETE",
       headers: {
+        "Content-Type": "application/json",
         Authorization: `Basic ${Buffer.from(`${secretKey}:`).toString("base64")}`,
       },
+      body: JSON.stringify(body),
     })
 
     const data = await response.json().catch(() => null)
 
     if (!response.ok) {
       const mensagem = data?.message || data?.errors?.[0]?.message || `Erro ${response.status} na Pagar.me`
-      console.error("[v0] Erro ao cancelar cobrança na Pagar.me:", mensagem, data)
-      return { success: false, error: mensagem }
+      console.error("[v0] Erro ao cancelar cobrança na Pagar.me:", mensagem, JSON.stringify(data))
+      // Anexa a resposta bruta da Pagar.me à mensagem — o corpo aceito por
+      // este endpoint pra bank_account não é documentado de forma
+      // consistente (o texto da doc menciona a exigência, mas o schema
+      // publicado só lista "amount"), então é preciso ver a resposta real
+      // pra saber qual campo específico está sendo rejeitado.
+      const detalhe = data?.errors ? ` — detalhe: ${JSON.stringify(data.errors)}` : ""
+      return { success: false, error: `${mensagem}${detalhe}` }
     }
 
     return { success: true }

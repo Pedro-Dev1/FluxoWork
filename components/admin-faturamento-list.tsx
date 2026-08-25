@@ -24,6 +24,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Settings2, MoreVertical, Loader2, FileText, Send, ExternalLink, Ban } from "lucide-react"
@@ -92,6 +93,12 @@ export function AdminFaturamentoList({
     enderecoCep: "",
     enderecoCidade: "",
     enderecoUf: "",
+    bancoCodigo: "",
+    bancoAgencia: "",
+    bancoAgenciaDv: "",
+    bancoConta: "",
+    bancoContaDv: "",
+    bancoTipoConta: "" as "" | "conta_corrente" | "conta_poupanca",
   })
 
   const [carteiraGerar, setCarteiraGerar] = useState<CarteiraFaturamento | null>(null)
@@ -126,6 +133,12 @@ export function AdminFaturamentoList({
       enderecoCep: carteira.endereco_cep || "",
       enderecoCidade: carteira.endereco_cidade || "",
       enderecoUf: carteira.endereco_uf || "",
+      bancoCodigo: carteira.banco_codigo || "",
+      bancoAgencia: carteira.banco_agencia || "",
+      bancoAgenciaDv: carteira.banco_agencia_dv || "",
+      bancoConta: carteira.banco_conta || "",
+      bancoContaDv: carteira.banco_conta_dv || "",
+      bancoTipoConta: carteira.banco_tipo_conta || "",
     })
   }
 
@@ -146,6 +159,12 @@ export function AdminFaturamentoList({
         enderecoCep: form.enderecoCep,
         enderecoCidade: form.enderecoCidade,
         enderecoUf: form.enderecoUf,
+        bancoCodigo: form.bancoCodigo || null,
+        bancoAgencia: form.bancoAgencia || null,
+        bancoAgenciaDv: form.bancoAgenciaDv || null,
+        bancoConta: form.bancoConta || null,
+        bancoContaDv: form.bancoContaDv || null,
+        bancoTipoConta: form.bancoTipoConta || null,
       })
       if (!resultado.success) {
         toast({ title: "Erro ao salvar configuração", description: resultado.error, variant: "destructive" })
@@ -501,6 +520,81 @@ export function AdminFaturamentoList({
                 placeholder="11999999999"
               />
             </div>
+
+            <div className="pt-2 border-t border-border">
+              <p className="text-sm font-medium text-foreground mb-1">Dados bancários (opcional)</p>
+              <p className="text-xs text-muted-foreground mb-3">
+                Exigidos pela Pagar.me só para cancelar um boleto emitido — sem eles, o cancelamento falha.
+              </p>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="bancoCodigo">Banco</Label>
+                  <Input
+                    id="bancoCodigo"
+                    value={form.bancoCodigo}
+                    onChange={(e) => setForm((p) => ({ ...p, bancoCodigo: e.target.value }))}
+                    placeholder="341"
+                    maxLength={3}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="bancoAgencia">Agência</Label>
+                  <Input
+                    id="bancoAgencia"
+                    value={form.bancoAgencia}
+                    onChange={(e) => setForm((p) => ({ ...p, bancoAgencia: e.target.value }))}
+                    placeholder="0001"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="bancoAgenciaDv">Dígito da agência</Label>
+                  <Input
+                    id="bancoAgenciaDv"
+                    value={form.bancoAgenciaDv}
+                    onChange={(e) => setForm((p) => ({ ...p, bancoAgenciaDv: e.target.value }))}
+                    placeholder="Se houver"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-4 mt-4">
+                <div className="space-y-2">
+                  <Label htmlFor="bancoConta">Conta</Label>
+                  <Input
+                    id="bancoConta"
+                    value={form.bancoConta}
+                    onChange={(e) => setForm((p) => ({ ...p, bancoConta: e.target.value }))}
+                    placeholder="58054"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="bancoContaDv">Dígito da conta</Label>
+                  <Input
+                    id="bancoContaDv"
+                    value={form.bancoContaDv}
+                    onChange={(e) => setForm((p) => ({ ...p, bancoContaDv: e.target.value }))}
+                    placeholder="1"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="bancoTipoConta">Tipo de conta</Label>
+                  <Select
+                    value={form.bancoTipoConta}
+                    onValueChange={(value) =>
+                      setForm((p) => ({ ...p, bancoTipoConta: value as "conta_corrente" | "conta_poupanca" }))
+                    }
+                  >
+                    <SelectTrigger id="bancoTipoConta">
+                      <SelectValue placeholder="Selecione" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="conta_corrente">Conta corrente</SelectItem>
+                      <SelectItem value="conta_poupanca">Conta poupança</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setCarteiraConfig(null)}>
                 Cancelar

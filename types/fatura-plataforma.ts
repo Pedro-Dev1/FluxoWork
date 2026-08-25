@@ -1,5 +1,7 @@
 export type StatusFaturaPlataforma = "pendente" | "emitida" | "paga" | "falhou" | "cancelada" | "vencida"
 
+export type TipoContaBancaria = "conta_corrente" | "conta_poupanca"
+
 export interface FaturaPlataforma {
   id: string
   tenant_id: string
@@ -35,5 +37,11 @@ export interface CarteiraFaturamento {
   endereco_cep: string | null
   endereco_cidade: string | null
   endereco_uf: string | null
+  banco_codigo: string | null
+  banco_agencia: string | null
+  banco_agencia_dv: string | null
+  banco_conta: string | null
+  banco_conta_dv: string | null
+  banco_tipo_conta: TipoContaBancaria | null
   usuarios_ativos: number
 }

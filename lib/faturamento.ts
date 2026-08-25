@@ -3,7 +3,7 @@ import { criarPedidoBoleto, cancelarCobranca } from "./pagarme"
 import { enviarEmailFaturaPlataforma } from "./email"
 import { registrarAuditoria } from "./auditoria"
 import { criarNotificacaoTransacional } from "./notificacoes"
-import type { CarteiraFaturamento, FaturaPlataforma } from "@/types/fatura-plataforma"
+import type { CarteiraFaturamento, FaturaPlataforma, TipoContaBancaria } from "@/types/fatura-plataforma"
 
 // Sem "use server" de propósito, mesmo motivo de lib/notificacoes.ts e
 // lib/auditoria.ts: gerarFaturaParaTenant() não valida permissão sozinha —
@@ -58,6 +58,12 @@ export type DadosFaturamento = {
   enderecoCep: string
   enderecoCidade: string
   enderecoUf: string
+  bancoCodigo?: string | null
+  bancoAgencia?: string | null
+  bancoAgenciaDv?: string | null
+  bancoConta?: string | null
+  bancoContaDv?: string | null
+  bancoTipoConta?: TipoContaBancaria | null
 }
 
 // Núcleo compartilhado entre o Server Action (app/actions/faturamento.ts,
@@ -98,6 +104,33 @@ export async function atualizarFaturamentoTenant(
     return { success: false, error: "UF inválida — use a sigla de 2 letras" }
   }
 
+  // Dados bancários são opcionais na emissão do boleto, mas a Pagar.me exige
+  // eles pra CANCELAR um boleto (ver lib/pagarme.ts::cancelarCobranca) — por
+  // isso, se algum campo bancário foi preenchido, exige o conjunto mínimo
+  // completo em vez de aceitar uma configuração pela metade que só falharia
+  // silenciosamente lá na frente, no momento do cancelamento.
+  const bancoPreenchido = [dados.bancoCodigo, dados.bancoAgencia, dados.bancoConta, dados.bancoTipoConta].some(
+    (v) => v?.trim(),
+  )
+  const bancoCodigo = dados.bancoCodigo?.replace(/\D/g, "") || null
+  const bancoAgencia = dados.bancoAgencia?.replace(/\D/g, "") || null
+  const bancoConta = dados.bancoConta?.replace(/\D/g, "") || null
+
+  if (bancoPreenchido) {
+    if (!bancoCodigo || bancoCodigo.length !== 3) {
+      return { success: false, error: "Código do banco inválido — deve ter 3 dígitos" }
+    }
+    if (!bancoAgencia) {
+      return { success: false, error: "Agência é obrigatória quando os dados bancários são informados" }
+    }
+    if (!bancoConta) {
+      return { success: false, error: "Conta é obrigatória quando os dados bancários são informados" }
+    }
+    if (!dados.bancoTipoConta) {
+      return { success: false, error: "Tipo de conta é obrigatório quando os dados bancários são informados" }
+    }
+  }
+
   if (!identificador.tenantId && !identificador.slug) {
     return { success: false, error: "Informe tenantId ou slug da carteira" }
   }
@@ -113,6 +146,12 @@ export async function atualizarFaturamentoTenant(
     endereco_logradouro: dados.enderecoLogradouro.trim(),
     endereco_complemento: dados.enderecoComplemento?.trim() || null,
     endereco_cep: cep,
+    banco_codigo: bancoCodigo,
+    banco_agencia: bancoAgencia,
+    banco_agencia_dv: dados.bancoAgenciaDv?.trim() || null,
+    banco_conta: bancoConta,
+    banco_conta_dv: dados.bancoContaDv?.trim() || null,
+    banco_tipo_conta: dados.bancoTipoConta || null,
     endereco_cidade: dados.enderecoCidade.trim(),
     endereco_uf: dados.enderecoUf.trim().toUpperCase(),
   })
@@ -157,7 +196,7 @@ export async function listarCarteirasFaturamento(): Promise<CarteiraFaturamento[
   const { data: tenants, error } = await supabase
     .from("tenants")
     .select(
-      "id, nome, ativo, valor_por_usuario_ativo, dia_faturamento, documento, email_faturamento, telefone_faturamento, endereco_logradouro, endereco_complemento, endereco_cep, endereco_cidade, endereco_uf",
+      "id, nome, ativo, valor_por_usuario_ativo, dia_faturamento, documento, email_faturamento, telefone_faturamento, endereco_logradouro, endereco_complemento, endereco_cep, endereco_cidade, endereco_uf, banco_codigo, banco_agencia, banco_agencia_dv, banco_conta, banco_conta_dv, banco_tipo_conta",
     )
     .order("nome", { ascending: true })
 
@@ -183,8 +222,8 @@ export async function listarCarteirasFaturamento(): Promise<CarteiraFaturamento[
 
 // Cancela uma fatura ainda não paga (boleto emitido, aguardando pagamento,
 // ou já vencido sem pagamento). Faturas pagas não podem ser canceladas por
-// aqui — desfazer uma cobrança já paga é estorno, exige dados bancários e é
-// um fluxo manual, fora do escopo de um clique único.
+// aqui — desfazer uma cobrança já paga é estorno e é um fluxo manual, fora
+// do escopo de um clique único.
 export async function cancelarFatura(
   faturaId: string,
   acionadoPor: string | null,
@@ -193,7 +232,9 @@ export async function cancelarFatura(
 
   const { data: fatura, error } = await supabase
     .from("faturas_plataforma")
-    .select("id, tenant_id, status, pagarme_charge_id")
+    .select(
+      "id, tenant_id, status, pagarme_charge_id, tenant:tenants(nome, documento, banco_codigo, banco_agencia, banco_agencia_dv, banco_conta, banco_conta_dv, banco_tipo_conta)",
+    )
     .eq("id", faturaId)
     .maybeSingle()
 
@@ -209,7 +250,45 @@ export async function cancelarFatura(
     return { success: false, error: "Esta fatura não tem uma cobrança associada na Pagar.me." }
   }
 
-  const resultado = await cancelarCobranca(fatura.pagarme_charge_id)
+  const tenant = fatura.tenant as unknown as {
+    nome: string
+    documento: string | null
+    banco_codigo: string | null
+    banco_agencia: string | null
+    banco_agencia_dv: string | null
+    banco_conta: string | null
+    banco_conta_dv: string | null
+    banco_tipo_conta: "conta_corrente" | "conta_poupanca" | null
+  } | null
+
+  // A Pagar.me (conta PSP) exige os dados bancários do cliente pra cancelar
+  // um boleto, mesmo nunca pago — ver comentário em
+  // lib/pagarme.ts::cancelarCobranca(). Sem isso configurado na carteira, a
+  // chamada nem chega a ser feita.
+  if (
+    !tenant?.documento ||
+    !tenant.banco_codigo ||
+    !tenant.banco_agencia ||
+    !tenant.banco_conta ||
+    !tenant.banco_tipo_conta
+  ) {
+    return {
+      success: false,
+      error:
+        "Dados bancários da carteira não configurados. Configure-os em Faturamento antes de cancelar um boleto — a Pagar.me exige essa informação para garantir o estorno caso o boleto seja pago antes do cancelamento processar.",
+    }
+  }
+
+  const resultado = await cancelarCobranca(fatura.pagarme_charge_id, {
+    bankCode: tenant.banco_codigo,
+    agencia: tenant.banco_agencia,
+    agenciaDv: tenant.banco_agencia_dv,
+    conta: tenant.banco_conta,
+    contaDv: tenant.banco_conta_dv,
+    documentNumber: tenant.documento,
+    legalName: tenant.nome,
+    type: tenant.banco_tipo_conta,
+  })
   if (!resultado.success) {
     return { success: false, error: resultado.error }
   }
