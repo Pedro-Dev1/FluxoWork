@@ -288,7 +288,7 @@ export function AdminFaturamentoList({
                         {carteira.usuarios_ativos} usuário{carteira.usuarios_ativos === 1 ? "" : "s"} ativo
                         {carteira.usuarios_ativos === 1 ? "" : "s"}
                         {carteira.data_inicio_cobranca
-                          ? ` · cobra todo dia 1 · a partir de ${formatarData(carteira.data_inicio_cobranca)}`
+                          ? ` · fatura sai 3 dias antes do dia 1 · a partir de ${formatarData(carteira.data_inicio_cobranca)}`
                           : ""}
                       </p>
                     </div>
@@ -441,7 +441,7 @@ export function AdminFaturamentoList({
               </div>
             </div>
             <p className="text-xs text-muted-foreground -mt-2">
-              A partir desta data, a fatura é gerada automaticamente todo dia 1 do mês.
+              A partir do mês desta data, a fatura é gerada automaticamente 3 dias antes do dia 1 de cada mês.
             </p>
             <div className="space-y-2">
               <Label htmlFor="documento">CNPJ do cliente</Label>

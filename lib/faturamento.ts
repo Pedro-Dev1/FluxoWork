@@ -23,13 +23,6 @@ function formatarDataBr(dataIso: string): string {
   return `${dia}/${mes}/${ano}`
 }
 
-// Mesmo fuso usado pelo cron (app/api/cron/gerar-faturas-mensais) pra
-// decidir "hoje" — servidor pode rodar em UTC, e faturamento é uma decisão
-// de calendário brasileiro (dia 1 no horário de São Paulo, não em UTC).
-function hojeSaoPauloISO(): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date())
-}
-
 type ResultadoFatura =
   | { success: true; fatura: FaturaPlataforma; jaExistia: boolean }
   | { success: false; error: string }
@@ -366,13 +359,17 @@ export async function gerarFaturaParaTenant(
     }
   }
 
-  // Cobrança só começa a valer a partir da data configurada — carteira nova
-  // não deve ser faturada antes do combinado com o cliente, mesmo que
-  // alguém acione "Gerar fatura agora" antes da hora.
-  if (tenant.data_inicio_cobranca > hojeSaoPauloISO()) {
+  // Cobrança só vale a partir do mês configurado — carteira nova não deve
+  // ser faturada antes do combinado com o cliente, mesmo que alguém acione
+  // "Gerar fatura agora" antes da hora. Compara contra o primeiro dia do mês
+  // de REFERÊNCIA (o mês sendo cobrado), não contra hoje — o cron gera a
+  // fatura 3 dias antes do dia 1 (ver app/api/cron/gerar-faturas-mensais),
+  // então "hoje" já é o mês anterior no dia em que isso roda.
+  const primeiroDiaReferencia = `${referenciaAno}-${String(referenciaMes).padStart(2, "0")}-01`
+  if (tenant.data_inicio_cobranca > primeiroDiaReferencia) {
     return {
       success: false,
-      error: `Cobrança começa em ${formatarDataBr(tenant.data_inicio_cobranca)} — ainda não chegou a data configurada.`,
+      error: `Cobrança começa em ${formatarDataBr(tenant.data_inicio_cobranca)} — esse mês ainda não chegou.`,
     }
   }
 
