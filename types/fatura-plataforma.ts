@@ -28,7 +28,7 @@ export interface CarteiraFaturamento {
   nome: string
   ativo: boolean
   valor_por_usuario_ativo: number | null
-  dia_faturamento: number | null
+  data_inicio_cobranca: string | null
   documento: string | null
   email_faturamento: string | null
   telefone_faturamento: string | null

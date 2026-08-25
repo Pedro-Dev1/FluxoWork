@@ -5,8 +5,10 @@ import { gerarFaturaParaTenant } from "@/lib/faturamento"
 export const dynamic = "force-dynamic"
 
 // Vercel Cron não tem granularidade "dia X do mês" — roda diário (ver
-// vercel.json) e filtra aqui dentro por tenants.dia_faturamento = hoje.
-function obterDataSaoPaulo(): { dia: number; mes: number; ano: number } {
+// vercel.json). Faturamento cai sempre no dia 1 (horário de São Paulo), então
+// nos outros 27~30 dias do mês esta rota só confirma que hoje não é o dia e
+// não faz nada.
+function obterDataSaoPaulo(): { dia: number; mes: number; ano: number; iso: string } {
   const partes = new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Sao_Paulo",
     year: "numeric",
@@ -14,11 +16,11 @@ function obterDataSaoPaulo(): { dia: number; mes: number; ano: number } {
     day: "2-digit",
   }).formatToParts(new Date())
 
-  return {
-    ano: Number(partes.find((p) => p.type === "year")?.value),
-    mes: Number(partes.find((p) => p.type === "month")?.value),
-    dia: Number(partes.find((p) => p.type === "day")?.value),
-  }
+  const ano = Number(partes.find((p) => p.type === "year")?.value)
+  const mes = Number(partes.find((p) => p.type === "month")?.value)
+  const dia = Number(partes.find((p) => p.type === "day")?.value)
+
+  return { ano, mes, dia, iso: `${ano}-${String(mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}` }
 }
 
 export async function GET(request: NextRequest) {
@@ -32,15 +34,20 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
   }
 
-  const { dia, mes, ano } = obterDataSaoPaulo()
+  const { dia, mes, ano, iso } = obterDataSaoPaulo()
+
+  if (dia !== 1) {
+    return NextResponse.json({ processadas: 0, sucesso: 0, falha: 0, detalhes: [], info: "Hoje não é dia 1." })
+  }
 
   const supabase = await createAdminClient()
   const { data: tenants, error } = await supabase
     .from("tenants")
     .select("id, nome")
     .eq("ativo", true)
-    .eq("dia_faturamento", dia)
     .not("valor_por_usuario_ativo", "is", null)
+    .not("data_inicio_cobranca", "is", null)
+    .lte("data_inicio_cobranca", iso)
 
   if (error) {
     console.error("[v0] Erro ao buscar carteiras pra faturar:", error)

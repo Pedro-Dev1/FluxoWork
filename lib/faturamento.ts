@@ -23,6 +23,13 @@ function formatarDataBr(dataIso: string): string {
   return `${dia}/${mes}/${ano}`
 }
 
+// Mesmo fuso usado pelo cron (app/api/cron/gerar-faturas-mensais) pra
+// decidir "hoje" — servidor pode rodar em UTC, e faturamento é uma decisão
+// de calendário brasileiro (dia 1 no horário de São Paulo, não em UTC).
+function hojeSaoPauloISO(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date())
+}
+
 type ResultadoFatura =
   | { success: true; fatura: FaturaPlataforma; jaExistia: boolean }
   | { success: false; error: string }
@@ -49,7 +56,7 @@ export async function resolverEmailCobranca(tenantId: string, emailFaturamento: 
 
 export type DadosFaturamento = {
   valorPorUsuarioAtivo: number
-  diaFaturamento: number
+  dataInicioCobranca: string // YYYY-MM-DD
   documento: string
   emailFaturamento?: string | null
   telefoneFaturamento?: string | null
@@ -79,8 +86,8 @@ export async function atualizarFaturamentoTenant(
     return { success: false, error: "O valor por usuário ativo deve ser maior que zero" }
   }
 
-  if (dados.diaFaturamento < 1 || dados.diaFaturamento > 28) {
-    return { success: false, error: "O dia de faturamento deve estar entre 1 e 28" }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dados.dataInicioCobranca) || Number.isNaN(Date.parse(dados.dataInicioCobranca))) {
+    return { success: false, error: "Data de início da cobrança inválida" }
   }
 
   const documento = dados.documento.replace(/\D/g, "")
@@ -139,7 +146,7 @@ export async function atualizarFaturamentoTenant(
 
   let query = supabase.from("tenants").update({
     valor_por_usuario_ativo: dados.valorPorUsuarioAtivo,
-    dia_faturamento: dados.diaFaturamento,
+    data_inicio_cobranca: dados.dataInicioCobranca,
     documento,
     email_faturamento: dados.emailFaturamento?.trim() || null,
     telefone_faturamento: dados.telefoneFaturamento?.trim() || null,
@@ -178,7 +185,7 @@ export async function atualizarFaturamentoTenant(
     detalhes: {
       carteira: tenant.nome,
       valor_por_usuario_ativo: dados.valorPorUsuarioAtivo,
-      dia_faturamento: dados.diaFaturamento,
+      data_inicio_cobranca: dados.dataInicioCobranca,
       origem: acionadoPor ? "painel" : "api",
     },
   })
@@ -196,7 +203,7 @@ export async function listarCarteirasFaturamento(): Promise<CarteiraFaturamento[
   const { data: tenants, error } = await supabase
     .from("tenants")
     .select(
-      "id, nome, ativo, valor_por_usuario_ativo, dia_faturamento, documento, email_faturamento, telefone_faturamento, endereco_logradouro, endereco_complemento, endereco_cep, endereco_cidade, endereco_uf, banco_codigo, banco_agencia, banco_agencia_dv, banco_conta, banco_conta_dv, banco_tipo_conta",
+      "id, nome, ativo, valor_por_usuario_ativo, data_inicio_cobranca, documento, email_faturamento, telefone_faturamento, endereco_logradouro, endereco_complemento, endereco_cep, endereco_cidade, endereco_uf, banco_codigo, banco_agencia, banco_agencia_dv, banco_conta, banco_conta_dv, banco_tipo_conta",
     )
     .order("nome", { ascending: true })
 
@@ -331,7 +338,7 @@ export async function gerarFaturaParaTenant(
   const { data: tenant, error: tenantError } = await supabase
     .from("tenants")
     .select(
-      "id, nome, ativo, valor_por_usuario_ativo, dia_faturamento, documento, email_faturamento, telefone_faturamento, endereco_logradouro, endereco_complemento, endereco_cep, endereco_cidade, endereco_uf",
+      "id, nome, ativo, valor_por_usuario_ativo, data_inicio_cobranca, documento, email_faturamento, telefone_faturamento, endereco_logradouro, endereco_complemento, endereco_cep, endereco_cidade, endereco_uf",
     )
     .eq("id", tenantId)
     .maybeSingle()
@@ -346,7 +353,7 @@ export async function gerarFaturaParaTenant(
 
   if (
     !tenant.valor_por_usuario_ativo ||
-    !tenant.dia_faturamento ||
+    !tenant.data_inicio_cobranca ||
     !tenant.documento ||
     !tenant.endereco_logradouro ||
     !tenant.endereco_cep ||
@@ -355,7 +362,17 @@ export async function gerarFaturaParaTenant(
   ) {
     return {
       success: false,
-      error: "Configuração de faturamento incompleta (valor, dia, CNPJ ou endereço ausente).",
+      error: "Configuração de faturamento incompleta (valor, data de início, CNPJ ou endereço ausente).",
+    }
+  }
+
+  // Cobrança só começa a valer a partir da data configurada — carteira nova
+  // não deve ser faturada antes do combinado com o cliente, mesmo que
+  // alguém acione "Gerar fatura agora" antes da hora.
+  if (tenant.data_inicio_cobranca > hojeSaoPauloISO()) {
+    return {
+      success: false,
+      error: `Cobrança começa em ${formatarDataBr(tenant.data_inicio_cobranca)} — ainda não chegou a data configurada.`,
     }
   }
 

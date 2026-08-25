@@ -84,7 +84,7 @@ export function AdminFaturamentoList({
   const [salvandoConfig, setSalvandoConfig] = useState(false)
   const [form, setForm] = useState({
     valorPorUsuarioAtivo: "",
-    diaFaturamento: "",
+    dataInicioCobranca: "",
     documento: "",
     emailFaturamento: "",
     telefoneFaturamento: "",
@@ -124,7 +124,7 @@ export function AdminFaturamentoList({
     setCarteiraConfig(carteira)
     setForm({
       valorPorUsuarioAtivo: carteira.valor_por_usuario_ativo?.toString() || "",
-      diaFaturamento: carteira.dia_faturamento?.toString() || "",
+      dataInicioCobranca: carteira.data_inicio_cobranca || "",
       documento: carteira.documento || "",
       emailFaturamento: carteira.email_faturamento || "",
       telefoneFaturamento: carteira.telefone_faturamento || "",
@@ -150,7 +150,7 @@ export function AdminFaturamentoList({
     try {
       const resultado = await atualizarConfiguracaoFaturamento(carteiraConfig.id, {
         valorPorUsuarioAtivo: Number(form.valorPorUsuarioAtivo),
-        diaFaturamento: Number(form.diaFaturamento),
+        dataInicioCobranca: form.dataInicioCobranca,
         documento: form.documento,
         emailFaturamento: form.emailFaturamento || null,
         telefoneFaturamento: form.telefoneFaturamento || null,
@@ -262,7 +262,7 @@ export function AdminFaturamentoList({
             {carteiras.map((carteira) => {
               const configurado =
                 carteira.valor_por_usuario_ativo != null &&
-                carteira.dia_faturamento != null &&
+                carteira.data_inicio_cobranca != null &&
                 carteira.documento != null &&
                 carteira.endereco_logradouro != null &&
                 carteira.endereco_cep != null &&
@@ -287,7 +287,9 @@ export function AdminFaturamentoList({
                       <p className="text-sm text-muted-foreground">
                         {carteira.usuarios_ativos} usuário{carteira.usuarios_ativos === 1 ? "" : "s"} ativo
                         {carteira.usuarios_ativos === 1 ? "" : "s"}
-                        {carteira.dia_faturamento ? ` · dia ${carteira.dia_faturamento} de cada mês` : ""}
+                        {carteira.data_inicio_cobranca
+                          ? ` · cobra todo dia 1 · a partir de ${formatarData(carteira.data_inicio_cobranca)}`
+                          : ""}
                       </p>
                     </div>
 
@@ -428,18 +430,19 @@ export function AdminFaturamentoList({
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="dia">Dia do mês</Label>
+                <Label htmlFor="dataInicioCobranca">Início da cobrança</Label>
                 <Input
-                  id="dia"
-                  type="number"
-                  min="1"
-                  max="28"
-                  value={form.diaFaturamento}
-                  onChange={(e) => setForm((p) => ({ ...p, diaFaturamento: e.target.value }))}
+                  id="dataInicioCobranca"
+                  type="date"
+                  value={form.dataInicioCobranca}
+                  onChange={(e) => setForm((p) => ({ ...p, dataInicioCobranca: e.target.value }))}
                   required
                 />
               </div>
             </div>
+            <p className="text-xs text-muted-foreground -mt-2">
+              A partir desta data, a fatura é gerada automaticamente todo dia 1 do mês.
+            </p>
             <div className="space-y-2">
               <Label htmlFor="documento">CNPJ do cliente</Label>
               <Input

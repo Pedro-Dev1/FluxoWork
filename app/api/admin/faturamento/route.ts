@@ -4,9 +4,9 @@ import { atualizarFaturamentoTenant, listarCarteirasFaturamento, type DadosFatur
 export const dynamic = "force-dynamic"
 
 // API do Super Admin pra configurar o faturamento de uma carteira (CNPJ,
-// endereço, valor por usuário, dia do mês) sem passar pela tela — pensada
-// pra automação/scripts, não pra uso de dentro do navegador (por isso Bearer
-// API key, não o cookie de sessão).
+// endereço, valor por usuário, data de início da cobrança) sem passar pela
+// tela — pensada pra automação/scripts, não pra uso de dentro do navegador
+// (por isso Bearer API key, não o cookie de sessão).
 function autorizado(request: NextRequest): boolean {
   const chave = process.env.FATURAMENTO_API_KEY
   if (!chave) {
@@ -51,7 +51,7 @@ export async function PATCH(request: NextRequest) {
 
   if (
     dados.valorPorUsuarioAtivo == null ||
-    dados.diaFaturamento == null ||
+    !dados.dataInicioCobranca ||
     !dados.documento ||
     !dados.enderecoLogradouro ||
     !dados.enderecoCep ||
@@ -61,7 +61,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json(
       {
         error:
-          "Campos obrigatórios: valorPorUsuarioAtivo, diaFaturamento, documento, enderecoLogradouro, enderecoCep, enderecoCidade, enderecoUf",
+          "Campos obrigatórios: valorPorUsuarioAtivo, dataInicioCobranca, documento, enderecoLogradouro, enderecoCep, enderecoCidade, enderecoUf",
       },
       { status: 400 },
     )
